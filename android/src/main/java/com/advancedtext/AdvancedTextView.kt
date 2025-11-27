@@ -182,6 +182,8 @@ class AdvancedTextView : TextView, View.OnCreateContextMenuListener {
         }
 
         override fun updateDrawState(ds: TextPaint) {
+            super.updateDrawState(ds)
+            ds.color = currentTextColor
             ds.isUnderlineText = false
         }
     }
