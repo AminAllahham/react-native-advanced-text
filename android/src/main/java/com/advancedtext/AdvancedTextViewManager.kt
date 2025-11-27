@@ -1,6 +1,7 @@
+// File: AdvancedTextViewManager.kt
+// This should be the ONLY content in this file
 package com.advancedtext
 
-import android.graphics.Color
 import android.view.ViewGroup
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
