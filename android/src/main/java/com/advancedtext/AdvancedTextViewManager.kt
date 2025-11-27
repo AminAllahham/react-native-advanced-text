@@ -1,5 +1,7 @@
 package com.advancedtext
 
+import android.graphics.Color
+import android.view.ViewGroup
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.uimanager.SimpleViewManager
@@ -27,7 +29,13 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
     }
 
     public override fun createViewInstance(context: ThemedReactContext): AdvancedTextView {
-        return AdvancedTextView(context)
+        val view = AdvancedTextView(context)
+        // Set default layout params to ensure the view is visible
+        view.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        return view
     }
 
     @ReactProp(name = "text")
@@ -72,7 +80,13 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
         view?.setIndicatorWordIndex(index)
     }
 
-
+    // Add this method to register custom events
+    override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
+        return mapOf(
+            "onWordPress" to mapOf("registrationName" to "onWordPress"),
+            "onSelection" to mapOf("registrationName" to "onSelection")
+        )
+    }
 
     companion object {
         const val NAME = "AdvancedTextView"
