@@ -81,6 +81,23 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
         view?.setIndicatorWordIndex(index)
     }
 
+    @ReactProp(name = "color")
+    fun setColor(view: AdvancedTextView?, color: String?) {
+        color?.let {
+            try {
+                view?.setTextColor(android.graphics.Color.parseColor(it))
+            } catch (e: IllegalArgumentException) {
+                // fallback to default color if parsing fails
+                view?.setTextColor(android.graphics.Color.BLACK)
+            }
+        }
+    }
+
+    @ReactProp(name = "fontSize")
+    fun setFontSize(view: AdvancedTextView?, fontSize: Int) {
+        view?.setTextSize(fontSize.toFloat())
+    }
+
     // Add this method to register custom events
     override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
         return mapOf(
@@ -88,6 +105,7 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
             "onSelection" to mapOf("registrationName" to "onSelection")
         )
     }
+
 
     companion object {
         const val NAME = "AdvancedTextView"

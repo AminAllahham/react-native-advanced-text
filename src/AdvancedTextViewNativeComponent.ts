@@ -11,6 +11,8 @@ interface HighlightedWord {
 
 interface NativeProps extends ViewProps {
   text: string;
+  color: string;
+  fontSize: Int32;
   highlightedWords?: ReadonlyArray<HighlightedWord>;
   menuOptions?: ReadonlyArray<string>;
   onWordPress?: DirectEventHandler<{ word: string }>;
