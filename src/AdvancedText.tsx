@@ -9,8 +9,6 @@ interface HighlightedWord {
 interface NativeProps extends ViewProps {
   text: string;
   highlightedWords?: ReadonlyArray<HighlightedWord>;
-  color: string;
-  fontSize: number;
 
   menuOptions?: ReadonlyArray<string>;
   onWordPress?: (
@@ -29,8 +27,6 @@ export const AdvancedText: React.FC<NativeProps> = ({
   onWordPress,
   onSelection,
   indicatorWordIndex,
-  color,
-  fontSize,
 }) => {
   return (
     <AdvancedTextViewNativeComponent
@@ -40,8 +36,6 @@ export const AdvancedText: React.FC<NativeProps> = ({
       onWordPress={onWordPress}
       onSelection={onSelection}
       indicatorWordIndex={indicatorWordIndex}
-      color={color}
-      fontSize={fontSize}
     />
   );
 };

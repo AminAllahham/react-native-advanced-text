@@ -245,7 +245,7 @@ class AdvancedTextView : TextView {
         override fun updateDrawState(ds: TextPaint) {
             // Don't call super to avoid default link styling (blue color, underline)
             // Keep the original text appearance
-            ds.color = currentTextColor
+           
             ds.isUnderlineText = false
             ds.bgColor = Color.TRANSPARENT
         }
