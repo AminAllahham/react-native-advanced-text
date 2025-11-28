@@ -9,11 +9,9 @@ import android.text.TextPaint
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.BackgroundColorSpan
-import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.util.Log
-import android.view.ActionMode
-import android.view.Menu
+import android.view.ContextMenu
 import android.view.MenuItem
 import android.view.View
 import android.widget.TextView
@@ -22,7 +20,7 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.events.RCTEventEmitter
 import android.text.Selection
 
-class AdvancedTextView : TextView {
+class AdvancedTextView : TextView, View.OnCreateContextMenuListener {
 
     private val TAG = "AdvancedTextView"
 
@@ -30,7 +28,7 @@ class AdvancedTextView : TextView {
     private var menuOptions: List<String> = emptyList()
     private var indicatorWordIndex: Int = -1
     private var lastSelectedText: String = ""
-    private var customActionMode: ActionMode? = null
+    private var isSelectionEnabled: Boolean = true
 
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
@@ -39,65 +37,24 @@ class AdvancedTextView : TextView {
     private fun init() {
         Log.d(TAG, "AdvancedTextView initialized")
 
-        // Set default text appearance - DON'T set black color here
+        // Set default text appearance
+        setTextColor(Color.BLACK)
         textSize = 16f
         setPadding(16, 16, 16, 16)
 
         movementMethod = LinkMovementMethod.getInstance()
         setTextIsSelectable(true)
+        setOnCreateContextMenuListener(this)
 
-        // Use custom action mode for selection menu
-        customSelectionActionModeCallback = object : ActionMode.Callback {
-            override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                Log.d(TAG, "onCreateActionMode triggered")
-                customActionMode = mode
-                return true
-            }
-
-            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                Log.d(TAG, "onPrepareActionMode triggered")
-                menu?.clear()
-
-                val selectionStart = selectionStart
-                val selectionEnd = selectionEnd
-
-                if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
-                    lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
-                    Log.d(TAG, "User selected text: '$lastSelectedText'")
-                    Log.d(TAG, "Menu options available: $menuOptions")
-
-                    menuOptions.forEachIndexed { index, option ->
-                        menu?.add(0, index, index, option)
-                    }
-
-                    sendSelectionEvent(lastSelectedText, "selection")
-                    return true
-                }
-                return false
-            }
-
-            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
-                item?.let {
-                    val menuItemText = it.title.toString()
-                    Log.d(TAG, "Menu item clicked: $menuItemText")
-                    sendSelectionEvent(lastSelectedText, menuItemText)
-                    mode?.finish()
-                    return true
-                }
-                return false
-            }
-
-            override fun onDestroyActionMode(mode: ActionMode?) {
-                Log.d(TAG, "onDestroyActionMode")
-                customActionMode = null
-            }
-        }
+        // Ensure minimum height for visibility during debugging
+        minHeight = 100
     }
 
     fun setAdvancedText(text: String) {
         Log.d(TAG, "setAdvancedText: $text (length=${text.length})")
         this.text = text
         updateTextWithHighlights()
+        // Force layout update
         requestLayout()
         invalidate()
     }
@@ -161,16 +118,16 @@ class AdvancedTextView : TextView {
 
                     if (wordIndex == indicatorWordIndex) {
                         Log.d(TAG, "Applying indicator span to word '$word' at index $wordIndex")
-                        // Apply red color to the indicator word
+
                         spannableString.setSpan(
-                            ForegroundColorSpan(Color.RED),
+                            IndicatorSpan(),
                             wordStart,
                             wordEnd,
                             Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
 
-                    // Make words clickable
+                    // clickable span
                     spannableString.setSpan(
                         WordClickableSpan(wordIndex, word),
                         wordStart,
@@ -185,6 +142,39 @@ class AdvancedTextView : TextView {
 
         setText(spannableString, BufferType.SPANNABLE)
         Log.d(TAG, "Text updated with spans")
+    }
+
+    override fun onCreateContextMenu(menu: ContextMenu?, v: View?, menuInfo: ContextMenu.ContextMenuInfo?) {
+        val selectionStart = selectionStart
+        val selectionEnd = selectionEnd
+
+        Log.d(TAG, "onCreateContextMenu triggered. selectionStart=$selectionStart selectionEnd=$selectionEnd")
+
+        if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
+            lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
+
+            Log.d(TAG, "User selected text: '$lastSelectedText'")
+            Log.d(TAG, "Menu options available: $menuOptions")
+
+            menu?.clear()
+
+            menuOptions.forEachIndexed { index, option ->
+                menu?.add(0, index, index, option)?.setOnMenuItemClickListener {
+                    Log.d(TAG, "Menu item clicked: $option")
+                    onMenuItemClick(it, lastSelectedText)
+                    true
+                }
+            }
+
+            sendSelectionEvent(lastSelectedText, "selection")
+        }
+    }
+
+    private fun onMenuItemClick(item: MenuItem, selectedText: String): Boolean {
+        val menuItemText = menuOptions[item.itemId]
+        Log.d(TAG, "onMenuItemClick: menuOption='$menuItemText', selectedText='$selectedText'")
+        sendSelectionEvent(selectedText, menuItemText)
+        return true
     }
 
     private fun sendSelectionEvent(selectedText: String, eventType: String) {
@@ -211,17 +201,24 @@ class AdvancedTextView : TextView {
 
         override fun onClick(widget: View) {
             Log.d(TAG, "Word clicked: '$word' (index=$wordIndex)")
-            // Clear any selection first to prevent interference
-            val spannable = widget as? TextView
-            spannable?.let {
-                Selection.removeSelection(it.text as? android.text.Spannable)
-            }
             sendWordPressEvent(word, wordIndex)
         }
 
         override fun updateDrawState(ds: TextPaint) {
             super.updateDrawState(ds)
-            // Don't change the color - let ForegroundColorSpan handle it
+            ds.color = currentTextColor
+            ds.isUnderlineText = false
+        }
+    }
+
+    private inner class IndicatorSpan : ClickableSpan() {
+        override fun onClick(widget: View) {
+            Log.d(TAG, "IndicatorSpan clicked (shouldn't trigger action)")
+        }
+
+        override fun updateDrawState(ds: TextPaint) {
+            ds.color = Color.RED
+            ds.isFakeBoldText = true
             ds.isUnderlineText = false
         }
     }
