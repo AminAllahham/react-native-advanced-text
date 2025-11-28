@@ -1,5 +1,5 @@
 import { codegenNativeComponent } from 'react-native';
-import type { TextProps } from 'react-native';
+import type { ViewProps } from 'react-native';
 // @ts-ignore
 // eslint-disable-next-line prettier/prettier
 import type { DirectEventHandler, Int32 } from 'react-native/Libraries/Types/CodegenTypes';
@@ -9,7 +9,7 @@ interface HighlightedWord {
   highlightColor: string;
 }
 
-interface NativeProps extends TextProps {
+interface NativeProps extends ViewProps {
   text: string;
   highlightedWords?: ReadonlyArray<HighlightedWord>;
   menuOptions?: ReadonlyArray<string>;

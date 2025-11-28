@@ -1,4 +1,4 @@
-import type { NativeSyntheticEvent, TextProps } from 'react-native';
+import type { NativeSyntheticEvent, ViewProps } from 'react-native';
 import AdvancedTextViewNativeComponent from './AdvancedTextViewNativeComponent';
 
 interface HighlightedWord {
@@ -6,7 +6,7 @@ interface HighlightedWord {
   highlightColor: string;
 }
 
-interface NativeProps extends TextProps {
+interface NativeProps extends ViewProps {
   text: string;
   highlightedWords?: ReadonlyArray<HighlightedWord>;
   menuOptions?: ReadonlyArray<string>;
