@@ -13,9 +13,11 @@ interface NativeProps extends ViewProps {
   fontSize: number;
 
   menuOptions?: ReadonlyArray<string>;
-  onWordPress?: (event: NativeSyntheticEvent<{ word: string }>) => void;
+  onWordPress?: (
+    event: NativeSyntheticEvent<{ word: string; index: string }>
+  ) => void;
   onSelection?: (
-    event: NativeSyntheticEvent<{ selectedText: string; eventType: string }>
+    event: NativeSyntheticEvent<{ selectedText: string; event: string }>
   ) => void;
   indicatorWordIndex?: number;
 }
