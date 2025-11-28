@@ -257,7 +257,7 @@ class AdvancedTextView : TextView {
         }
 
         override fun updateDrawState(ds: TextPaint) {
-            ds.color = Color.RED
+
             ds.isFakeBoldText = true
             ds.isUnderlineText = false
         }
