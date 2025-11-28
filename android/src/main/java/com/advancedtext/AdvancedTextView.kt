@@ -95,8 +95,13 @@ class AdvancedTextView : TextView {
 
     fun setAdvancedText(text: String) {
         Log.d(TAG, "setAdvancedText: $text (length=${text.length})")
-        this.text = text
+
+        // Set the text first
+        super.setText(text, BufferType.SPANNABLE)
+
+        // Then apply highlights
         updateTextWithHighlights()
+
         // Force layout update
         requestLayout()
         invalidate()
@@ -132,59 +137,69 @@ class AdvancedTextView : TextView {
         }
 
         val spannableString = SpannableString(textValue)
-        val words = textValue.split("\\s+".toRegex())
+
+        // Split words while preserving spaces for accurate indexing
+        val words = textValue.split("\\s+".toRegex()).filter { it.isNotEmpty() }
 
         var currentIndex = 0
         words.forEachIndexed { wordIndex, word ->
 
-            if (word.isNotEmpty()) {
-                val wordStart = textValue.indexOf(word, currentIndex)
-                if (wordStart >= 0) {
-                    val wordEnd = wordStart + word.length
+            // Find the actual position of the word in the text
+            val wordStart = textValue.indexOf(word, currentIndex)
+            if (wordStart >= 0) {
+                val wordEnd = wordStart + word.length
 
-                    highlightedWords.find { it.index == wordIndex }?.let { highlightedWord ->
-                        val color = try {
-                            Color.parseColor(highlightedWord.highlightColor)
-                        } catch (e: IllegalArgumentException) {
-                            Log.e(TAG, "Invalid color: ${highlightedWord.highlightColor}, using yellow")
-                            Color.YELLOW
-                        }
-                        Log.d(TAG, "Applying highlight to word '$word' at index $wordIndex with color ${highlightedWord.highlightColor}")
+                Log.d(TAG, "Processing word '$word' at position $wordStart-$wordEnd, index $wordIndex")
 
-                        spannableString.setSpan(
-                            BackgroundColorSpan(color),
-                            wordStart,
-                            wordEnd,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
+                // Apply clickable span FIRST (this is important)
+                spannableString.setSpan(
+                    WordClickableSpan(wordIndex, word),
+                    wordStart,
+                    wordEnd,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+
+                // Then apply background color for highlighted words
+                highlightedWords.find { it.index == wordIndex }?.let { highlightedWord ->
+                    val color = try {
+                        Color.parseColor(highlightedWord.highlightColor)
+                    } catch (e: IllegalArgumentException) {
+                        Log.e(TAG, "Invalid color: ${highlightedWord.highlightColor}, using yellow")
+                        Color.YELLOW
                     }
+                    Log.d(TAG, "Applying highlight to word '$word' at index $wordIndex with color ${highlightedWord.highlightColor}")
 
-                    if (wordIndex == indicatorWordIndex) {
-                        Log.d(TAG, "Applying indicator span to word '$word' at index $wordIndex")
-
-                        spannableString.setSpan(
-                            IndicatorSpan(),
-                            wordStart,
-                            wordEnd,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                    }
-
-                    // clickable span
                     spannableString.setSpan(
-                        WordClickableSpan(wordIndex, word),
+                        BackgroundColorSpan(color),
                         wordStart,
                         wordEnd,
                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
-
-                    currentIndex = wordEnd
                 }
+
+                // Then apply indicator span
+                if (wordIndex == indicatorWordIndex) {
+                    Log.d(TAG, "Applying indicator span to word '$word' at index $wordIndex")
+
+                    spannableString.setSpan(
+                        IndicatorSpan(),
+                        wordStart,
+                        wordEnd,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+
+                currentIndex = wordEnd
             }
         }
 
+        // Set the spannable text
         setText(spannableString, BufferType.SPANNABLE)
-        Log.d(TAG, "Text updated with spans")
+
+        // Ensure movement method is still set
+        movementMethod = LinkMovementMethod.getInstance()
+
+        Log.d(TAG, "Text updated with spans, total spans")
     }
 
 
@@ -214,19 +229,25 @@ class AdvancedTextView : TextView {
     }
 
     private inner class WordClickableSpan(
-        private val wordIndex: Int,
-        private val word: String
+    private val wordIndex: Int,
+    private val word: String
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
-            Log.d(TAG, "Word clicked: '$word' (index=$wordIndex)")
-            sendWordPressEvent(word, wordIndex)
+            Log.d(TAG, "WordClickableSpan onClick triggered: '$word' (index=$wordIndex)")
+
+            // Small delay to ensure the click is processed
+            widget.post {
+                sendWordPressEvent(word, wordIndex)
+            }
         }
 
         override fun updateDrawState(ds: TextPaint) {
-            super.updateDrawState(ds)
+            // Don't call super to avoid default link styling (blue color, underline)
+            // Keep the original text appearance
             ds.color = currentTextColor
             ds.isUnderlineText = false
+            ds.bgColor = Color.TRANSPARENT
         }
     }
 
