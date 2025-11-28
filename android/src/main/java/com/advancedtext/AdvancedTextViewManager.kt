@@ -1,3 +1,5 @@
+// File: AdvancedTextViewManager.kt
+// This should be the ONLY content in this file
 package com.advancedtext
 
 import android.view.ViewGroup
@@ -29,6 +31,7 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
 
     public override fun createViewInstance(context: ThemedReactContext): AdvancedTextView {
         val view = AdvancedTextView(context)
+        // Set default layout params to ensure the view is visible
         view.layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -39,16 +42,6 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
     @ReactProp(name = "text")
     override fun setText(view: AdvancedTextView?, text: String?) {
         view?.setAdvancedText(text ?: "")
-    }
-
-    @ReactProp(name = "fontSize", defaultFloat = 16f)
-    override fun setFontSize(view: AdvancedTextView?, fontSize: Float) {
-        view?.setFontSize(fontSize)
-    }
-
-    @ReactProp(name = "color")
-    override fun setColor(view: AdvancedTextView?, color: String?) {
-        view?.setTextColorProp(color)
     }
 
     @ReactProp(name = "highlightedWords")
@@ -88,6 +81,7 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
         view?.setIndicatorWordIndex(index)
     }
 
+    // Add this method to register custom events
     override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
         return mapOf(
             "onWordPress" to mapOf("registrationName" to "onWordPress"),

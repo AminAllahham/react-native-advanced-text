@@ -8,9 +8,9 @@ import android.text.TextPaint
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.util.Log
-import android.util.TypedValue
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
@@ -32,20 +32,16 @@ class AdvancedTextView : TextView {
     private var isSelectionEnabled: Boolean = true
     private var customActionMode: ActionMode? = null
 
-    // Cache for base text color to avoid parsing multiple times
-    private var baseTextColor: Int = Color.BLACK
-
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int) : super(context, attrs, defStyleAttr) { init() }
 
-    private fun init() {
+        private fun init() {
         Log.d(TAG, "AdvancedTextView initialized")
 
-        // Set default text appearance
+        // Set default text appearance - DON'T set black color here
         textSize = 16f
         setPadding(16, 16, 16, 16)
-        baseTextColor = currentTextColor
 
         movementMethod = LinkMovementMethod.getInstance()
         setTextIsSelectable(true)
@@ -67,6 +63,7 @@ class AdvancedTextView : TextView {
                 if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
                     lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
                     Log.d(TAG, "User selected text: '$lastSelectedText'")
+                    Log.d(TAG, "Menu options available: $menuOptions")
 
                     menuOptions.forEachIndexed { index, option ->
                         menu?.add(0, index, index, option)
@@ -98,44 +95,25 @@ class AdvancedTextView : TextView {
 
     fun setAdvancedText(text: String) {
         Log.d(TAG, "setAdvancedText: $text (length=${text.length})")
+
+        // Set the text first
         super.setText(text, BufferType.SPANNABLE)
+
+        // Then apply highlights
         updateTextWithHighlights()
+
+        // Force layout update
         requestLayout()
         invalidate()
     }
 
-    // Performance-optimized: Set base font size at view level
-    fun setFontSize(size: Float) {
-        Log.d(TAG, "setFontSize: $size")
-        // Use SP units for accessibility
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-    }
-
-    // Performance-optimized: Set base color at view level
-    fun setTextColorProp(colorString: String?) {
-        try {
-            val color = if (colorString != null) {
-                Color.parseColor(colorString)
-            } else {
-                Color.BLACK
-            }
-            Log.d(TAG, "setTextColorProp: $colorString -> $color")
-            baseTextColor = color
-            setTextColor(color)
-        } catch (e: IllegalArgumentException) {
-            Log.e(TAG, "Invalid color: $colorString, using black", e)
-            baseTextColor = Color.BLACK
-            setTextColor(Color.BLACK)
-        }
-    }
-
     fun setMenuOptions(menuOptions: List<String>) {
-        Log.d(TAG, "setMenuOptions received: $menuOptions")
+        Log.d(TAG, "setMenuOptions received from RN: $menuOptions")
         this.menuOptions = menuOptions
     }
 
     fun setHighlightedWords(highlightedWords: List<HighlightedWord>) {
-        Log.d(TAG, "setHighlightedWords received: $highlightedWords")
+        Log.d(TAG, "setHighlightedWords received from RN: $highlightedWords")
         this.highlightedWords = highlightedWords
         updateTextWithHighlights()
     }
@@ -149,6 +127,9 @@ class AdvancedTextView : TextView {
     private fun updateTextWithHighlights() {
         val textValue = this.text?.toString() ?: ""
         Log.d(TAG, "updateTextWithHighlights called")
+        Log.d(TAG, "Current text: $textValue")
+        Log.d(TAG, "Highlighted words: $highlightedWords")
+        Log.d(TAG, "Indicator index: $indicatorWordIndex")
 
         if (textValue.isEmpty()) {
             Log.d(TAG, "No text available, skipping")
@@ -156,15 +137,21 @@ class AdvancedTextView : TextView {
         }
 
         val spannableString = SpannableString(textValue)
+
+        // Split words while preserving spaces for accurate indexing
         val words = textValue.split("\\s+".toRegex()).filter { it.isNotEmpty() }
 
         var currentIndex = 0
         words.forEachIndexed { wordIndex, word ->
+
+            // Find the actual position of the word in the text
             val wordStart = textValue.indexOf(word, currentIndex)
             if (wordStart >= 0) {
                 val wordEnd = wordStart + word.length
 
-                // Apply clickable span
+                Log.d(TAG, "Processing word '$word' at position $wordStart-$wordEnd, index $wordIndex")
+
+                // Apply clickable span FIRST (this is important)
                 spannableString.setSpan(
                     WordClickableSpan(wordIndex, word),
                     wordStart,
@@ -172,14 +159,15 @@ class AdvancedTextView : TextView {
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
 
-                // Apply background highlight
+                // Then apply background color for highlighted words
                 highlightedWords.find { it.index == wordIndex }?.let { highlightedWord ->
                     val color = try {
                         Color.parseColor(highlightedWord.highlightColor)
                     } catch (e: IllegalArgumentException) {
-                        Log.e(TAG, "Invalid color: ${highlightedWord.highlightColor}")
+                        Log.e(TAG, "Invalid color: ${highlightedWord.highlightColor}, using yellow")
                         Color.YELLOW
                     }
+                    Log.d(TAG, "Applying highlight to word '$word' at index $wordIndex with color ${highlightedWord.highlightColor}")
 
                     spannableString.setSpan(
                         BackgroundColorSpan(color),
@@ -189,8 +177,10 @@ class AdvancedTextView : TextView {
                     )
                 }
 
-                // Apply indicator span
+                // Then apply indicator span
                 if (wordIndex == indicatorWordIndex) {
+                    Log.d(TAG, "Applying indicator span to word '$word' at index $wordIndex")
+
                     spannableString.setSpan(
                         IndicatorSpan(),
                         wordStart,
@@ -203,8 +193,22 @@ class AdvancedTextView : TextView {
             }
         }
 
+        // Set the spannable text
         setText(spannableString, BufferType.SPANNABLE)
+
+        // Ensure movement method is still set
         movementMethod = LinkMovementMethod.getInstance()
+
+        Log.d(TAG, "Text updated with spans, total spans")
+    }
+
+
+
+    private fun onMenuItemClick(item: MenuItem, selectedText: String): Boolean {
+        val menuItemText = menuOptions[item.itemId]
+        Log.d(TAG, "onMenuItemClick: menuOption='$menuItemText', selectedText='$selectedText'")
+        sendSelectionEvent(selectedText, menuItemText)
+        return true
     }
 
     private fun sendSelectionEvent(selectedText: String, eventType: String) {
@@ -225,20 +229,23 @@ class AdvancedTextView : TextView {
     }
 
     private inner class WordClickableSpan(
-        private val wordIndex: Int,
-        private val word: String
+    private val wordIndex: Int,
+    private val word: String
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
-            Log.d(TAG, "WordClickableSpan onClick: '$word' (index=$wordIndex)")
+            Log.d(TAG, "WordClickableSpan onClick triggered: '$word' (index=$wordIndex)")
+
+            // Small delay to ensure the click is processed
             widget.post {
                 sendWordPressEvent(word, wordIndex)
             }
         }
 
         override fun updateDrawState(ds: TextPaint) {
-            // Preserve the base text color instead of forcing a color
-            ds.color = baseTextColor
+            // Don't call super to avoid default link styling (blue color, underline)
+            // Keep the original text appearance
+
             ds.isUnderlineText = false
             ds.bgColor = Color.TRANSPARENT
         }
@@ -246,11 +253,11 @@ class AdvancedTextView : TextView {
 
     private inner class IndicatorSpan : ClickableSpan() {
         override fun onClick(widget: View) {
-            Log.d(TAG, "IndicatorSpan clicked")
+            Log.d(TAG, "IndicatorSpan clicked (shouldn't trigger action)")
         }
 
         override fun updateDrawState(ds: TextPaint) {
-            ds.color = baseTextColor
+
             ds.isFakeBoldText = true
             ds.isUnderlineText = false
         }
@@ -286,7 +293,7 @@ class AdvancedTextView : TextView {
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        Log.d(TAG, "onLayout: changed=$changed")
+        Log.d(TAG, "onLayout: changed=$changed, bounds=[$left,$top,$right,$bottom]")
     }
 }
 
