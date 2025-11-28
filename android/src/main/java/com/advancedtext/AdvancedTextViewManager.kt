@@ -1,7 +1,7 @@
 // File: AdvancedTextViewManager.kt
-// This should be the ONLY content in this file
 package com.advancedtext
 
+import android.graphics.Color
 import android.view.ViewGroup
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
@@ -31,10 +31,10 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
 
     public override fun createViewInstance(context: ThemedReactContext): AdvancedTextView {
         val view = AdvancedTextView(context)
-        // Set default layout params to ensure the view is visible
+        // Set layout params for proper sizing
         view.layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
+            ViewGroup.LayoutParams.WRAP_CONTENT  // Changed to WRAP_CONTENT for auto height
         )
         return view
     }
@@ -81,7 +81,15 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
         view?.setIndicatorWordIndex(index)
     }
 
-    // Add this method to register custom events
+    // Handle color prop from React Native style
+    @ReactProp(name = "color", customType = "Color")
+    fun setColor(view: AdvancedTextView?, color: Int?) {
+        color?.let {
+            view?.setTextColor(it)
+        }
+    }
+
+    // Register custom events
     override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
         return mapOf(
             "onWordPress" to mapOf("registrationName" to "onWordPress"),
