@@ -1,3 +1,4 @@
+// File: AdvancedTextView.kt
 package com.advancedtext
 
 import android.content.Context
@@ -29,32 +30,32 @@ class AdvancedTextView : TextView {
     private var menuOptions: List<String> = emptyList()
     private var indicatorWordIndex: Int = -1
     private var lastSelectedText: String = ""
-    private var isSelectionEnabled: Boolean = true
     private var customActionMode: ActionMode? = null
+    private var currentText: String = ""
+
+    // Cache for word positions to avoid recalculating
+    private var wordPositions: List<WordPosition> = emptyList()
 
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int) : super(context, attrs, defStyleAttr) { init() }
 
-        private fun init() {
+    private fun init() {
         Log.d(TAG, "AdvancedTextView initialized")
 
-        // Set default text appearance - DON'T set black color here
+        // Set default properties
         textSize = 16f
         setPadding(16, 16, 16, 16)
-
         movementMethod = LinkMovementMethod.getInstance()
         setTextIsSelectable(true)
 
         customSelectionActionModeCallback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                Log.d(TAG, "onCreateActionMode triggered")
                 customActionMode = mode
                 return true
             }
 
             override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                Log.d(TAG, "onPrepareActionMode triggered")
                 menu?.clear()
 
                 val selectionStart = selectionStart
@@ -62,8 +63,6 @@ class AdvancedTextView : TextView {
 
                 if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
                     lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
-                    Log.d(TAG, "User selected text: '$lastSelectedText'")
-                    Log.d(TAG, "Menu options available: $menuOptions")
 
                     menuOptions.forEachIndexed { index, option ->
                         menu?.add(0, index, index, option)
@@ -78,7 +77,6 @@ class AdvancedTextView : TextView {
             override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
                 item?.let {
                     val menuItemText = it.title.toString()
-                    Log.d(TAG, "Menu item clicked: $menuItemText")
                     sendSelectionEvent(lastSelectedText, menuItemText)
                     mode?.finish()
                     return true
@@ -87,133 +85,119 @@ class AdvancedTextView : TextView {
             }
 
             override fun onDestroyActionMode(mode: ActionMode?) {
-                Log.d(TAG, "onDestroyActionMode")
                 customActionMode = null
             }
         }
     }
 
     fun setAdvancedText(text: String) {
-        Log.d(TAG, "setAdvancedText: $text (length=${text.length})")
+        if (currentText == text) {
+            Log.d(TAG, "Text unchanged, skipping update")
+            return
+        }
 
-        // Set the text first
-        super.setText(text, BufferType.SPANNABLE)
-
-        // Then apply highlights
+        Log.d(TAG, "setAdvancedText: length=${text.length}")
+        currentText = text
+        calculateWordPositions(text)
         updateTextWithHighlights()
-
-        // Force layout update
-        requestLayout()
-        invalidate()
     }
 
     fun setMenuOptions(menuOptions: List<String>) {
-        Log.d(TAG, "setMenuOptions received from RN: $menuOptions")
+        if (this.menuOptions == menuOptions) return
         this.menuOptions = menuOptions
     }
 
     fun setHighlightedWords(highlightedWords: List<HighlightedWord>) {
-        Log.d(TAG, "setHighlightedWords received from RN: $highlightedWords")
+        if (this.highlightedWords == highlightedWords) return
         this.highlightedWords = highlightedWords
         updateTextWithHighlights()
     }
 
     fun setIndicatorWordIndex(index: Int) {
-        Log.d(TAG, "setIndicatorWordIndex received: $index")
+        if (this.indicatorWordIndex == index) return
         this.indicatorWordIndex = index
         updateTextWithHighlights()
     }
 
-    private fun updateTextWithHighlights() {
-        val textValue = this.text?.toString() ?: ""
-        Log.d(TAG, "updateTextWithHighlights called")
-        Log.d(TAG, "Current text: $textValue")
-        Log.d(TAG, "Highlighted words: $highlightedWords")
-        Log.d(TAG, "Indicator index: $indicatorWordIndex")
+    private fun calculateWordPositions(text: String) {
+        if (text.isEmpty()) {
+            wordPositions = emptyList()
+            return
+        }
 
-        if (textValue.isEmpty()) {
+        val positions = mutableListOf<WordPosition>()
+        val regex = "\\S+".toRegex()
+
+        regex.findAll(text).forEachIndexed { index, match ->
+            positions.add(WordPosition(
+                index = index,
+                start = match.range.first,
+                end = match.range.last + 1,
+                word = match.value
+            ))
+        }
+
+        wordPositions = positions
+        Log.d(TAG, "Calculated ${wordPositions.size} word positions")
+    }
+
+    private fun updateTextWithHighlights() {
+        if (currentText.isEmpty()) {
             Log.d(TAG, "No text available, skipping")
             return
         }
 
-        val spannableString = SpannableString(textValue)
+        val spannableString = SpannableString(currentText)
 
-        // Split words while preserving spaces for accurate indexing
-        val words = textValue.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-
-        var currentIndex = 0
-        words.forEachIndexed { wordIndex, word ->
-
-            // Find the actual position of the word in the text
-            val wordStart = textValue.indexOf(word, currentIndex)
-            if (wordStart >= 0) {
-                val wordEnd = wordStart + word.length
-
-                Log.d(TAG, "Processing word '$word' at position $wordStart-$wordEnd, index $wordIndex")
-
-                // Apply clickable span FIRST (this is important)
+        // Apply spans efficiently
+        wordPositions.forEach { wordPos ->
+            // Apply highlights
+            highlightedWords.find { it.index == wordPos.index }?.let { highlightedWord ->
+                val color = parseColor(highlightedWord.highlightColor)
                 spannableString.setSpan(
-                    WordClickableSpan(wordIndex, word),
-                    wordStart,
-                    wordEnd,
+                    BackgroundColorSpan(color),
+                    wordPos.start,
+                    wordPos.end,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
-
-                // Then apply background color for highlighted words
-                highlightedWords.find { it.index == wordIndex }?.let { highlightedWord ->
-                    val color = try {
-                        Color.parseColor(highlightedWord.highlightColor)
-                    } catch (e: IllegalArgumentException) {
-                        Log.e(TAG, "Invalid color: ${highlightedWord.highlightColor}, using yellow")
-                        Color.YELLOW
-                    }
-                    Log.d(TAG, "Applying highlight to word '$word' at index $wordIndex with color ${highlightedWord.highlightColor}")
-
-                    spannableString.setSpan(
-                        BackgroundColorSpan(color),
-                        wordStart,
-                        wordEnd,
-                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                }
-
-                // Then apply indicator span
-                if (wordIndex == indicatorWordIndex) {
-                    Log.d(TAG, "Applying indicator span to word '$word' at index $wordIndex")
-
-                    spannableString.setSpan(
-                        IndicatorSpan(),
-                        wordStart,
-                        wordEnd,
-                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
-                }
-
-                currentIndex = wordEnd
             }
+
+            // Apply indicator color
+            if (wordPos.index == indicatorWordIndex) {
+                spannableString.setSpan(
+                    ForegroundColorSpan(Color.RED),
+                    wordPos.start,
+                    wordPos.end,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+
+            // Make words clickable
+            spannableString.setSpan(
+                WordClickableSpan(wordPos.index, wordPos.word),
+                wordPos.start,
+                wordPos.end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
         }
 
-        // Set the spannable text
-        setText(spannableString, BufferType.SPANNABLE)
-
-        // Ensure movement method is still set
-        movementMethod = LinkMovementMethod.getInstance()
-
-        Log.d(TAG, "Text updated with spans, total spans")
+        // Use post to ensure UI thread and avoid layout issues
+        post {
+            setText(spannableString, BufferType.SPANNABLE)
+            Log.d(TAG, "Text updated with ${wordPositions.size} spans")
+        }
     }
 
-
-
-    private fun onMenuItemClick(item: MenuItem, selectedText: String): Boolean {
-        val menuItemText = menuOptions[item.itemId]
-        Log.d(TAG, "onMenuItemClick: menuOption='$menuItemText', selectedText='$selectedText'")
-        sendSelectionEvent(selectedText, menuItemText)
-        return true
+    private fun parseColor(colorString: String): Int {
+        return try {
+            Color.parseColor(colorString)
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Invalid color: $colorString, using yellow")
+            Color.YELLOW
+        }
     }
 
     private fun sendSelectionEvent(selectedText: String, eventType: String) {
-        Log.d(TAG, "sendSelectionEvent -> eventType='$eventType' selectedText='$selectedText'")
-
         try {
             val reactContext = context as? ReactContext ?: return
             val event = Arguments.createMap().apply {
@@ -229,43 +213,28 @@ class AdvancedTextView : TextView {
     }
 
     private inner class WordClickableSpan(
-    private val wordIndex: Int,
-    private val word: String
+        private val wordIndex: Int,
+        private val word: String
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
-            Log.d(TAG, "WordClickableSpan onClick triggered: '$word' (index=$wordIndex)")
-
-            // Small delay to ensure the click is processed
-            widget.post {
-                sendWordPressEvent(word, wordIndex)
+            Log.d(TAG, "Word clicked: '$word' (index=$wordIndex)")
+            val spannable = widget as? TextView
+            spannable?.text?.let {
+                if (it is android.text.Spannable) {
+                    Selection.removeSelection(it)
+                }
             }
+            sendWordPressEvent(word, wordIndex)
         }
 
         override fun updateDrawState(ds: TextPaint) {
-            // Don't call super to avoid default link styling (blue color, underline)
-            // Keep the original text appearance
-
-            ds.isUnderlineText = false
-            ds.bgColor = Color.TRANSPARENT
-        }
-    }
-
-    private inner class IndicatorSpan : ClickableSpan() {
-        override fun onClick(widget: View) {
-            Log.d(TAG, "IndicatorSpan clicked (shouldn't trigger action)")
-        }
-
-        override fun updateDrawState(ds: TextPaint) {
-
-            ds.isFakeBoldText = true
+            super.updateDrawState(ds)
             ds.isUnderlineText = false
         }
     }
 
     private fun sendWordPressEvent(word: String, index: Int) {
-        Log.d(TAG, "sendWordPressEvent -> word='$word', index=$index")
-
         try {
             val reactContext = context as? ReactContext ?: return
             val event = Arguments.createMap().apply {
@@ -281,20 +250,17 @@ class AdvancedTextView : TextView {
     }
 
     fun clearSelection() {
-        Log.d(TAG, "clearSelection called")
-        val spannable = this.text as? android.text.Spannable ?: return
-        Selection.removeSelection(spannable)
+        (text as? android.text.Spannable)?.let {
+            Selection.removeSelection(it)
+        }
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        Log.d(TAG, "onMeasure: width=${measuredWidth}, height=${measuredHeight}")
-    }
-
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        super.onLayout(changed, left, top, right, bottom)
-        Log.d(TAG, "onLayout: changed=$changed, bounds=[$left,$top,$right,$bottom]")
-    }
+    data class WordPosition(
+        val index: Int,
+        val start: Int,
+        val end: Int,
+        val word: String
+    )
 }
 
 data class HighlightedWord(

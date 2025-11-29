@@ -1,8 +1,8 @@
+/* eslint-disable prettier/prettier */
 import type { ViewProps } from 'react-native';
 import { codegenNativeComponent } from 'react-native';
 // @ts-ignore
-// eslint-disable-next-line prettier/prettier
-import type { DirectEventHandler, Int32 } from 'react-native/Libraries/Types/CodegenTypes';
+import type { DirectEventHandler, Float, Int32} from 'react-native/Libraries/Types/CodegenTypes';
 
 interface HighlightedWord {
   index: Int32;
@@ -13,9 +13,11 @@ interface NativeProps extends ViewProps {
   text: string;
   highlightedWords?: ReadonlyArray<HighlightedWord>;
   menuOptions?: ReadonlyArray<string>;
-  onWordPress?: DirectEventHandler<{ word: string }>;
-  onSelection?: DirectEventHandler<{ selectedText: string; eventType: string }>;
+  onWordPress?: DirectEventHandler<{ word: string; index: Int32 }>;
+  onSelection?: DirectEventHandler<{ selectedText: string; event: string }>;
   indicatorWordIndex?: Int32;
+  color?: Int32;
+  fontSize?: Float;
 }
 
 export default codegenNativeComponent<NativeProps>('AdvancedTextView');
