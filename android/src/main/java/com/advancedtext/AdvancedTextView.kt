@@ -1,4 +1,3 @@
-// File: AdvancedTextView.kt
 package com.advancedtext
 
 import android.content.Context
@@ -34,7 +33,6 @@ class AdvancedTextView : TextView {
     private var currentText: String = ""
     private var textColor: String = "#000000"
 
-    // Cache for word positions to avoid recalculating
     private var wordPositions: List<WordPosition> = emptyList()
 
     constructor(context: Context?) : super(context) { init() }
@@ -42,51 +40,52 @@ class AdvancedTextView : TextView {
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int) : super(context, attrs, defStyleAttr) { init() }
 
     private fun init() {
-    Log.d(TAG, "AdvancedTextView initialized")
+        Log.d(TAG, "AdvancedTextView initialized")
 
-    textSize = 16f
-    setPadding(16, 16, 16, 16)
+        textSize = 16f
+        setPadding(16, 16, 16, 16)
+        movementMethod = LinkMovementMethod.getInstance()
+        setTextIsSelectable(true)
+       
 
-    movementMethod = ClickableMovementMethod.getInstance()
-    isClickable = false
-    isLongClickable = false
+        customSelectionActionModeCallback = object : ActionMode.Callback {
+            override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                customActionMode = mode
+                return true
+            }
 
-    setTextIsSelectable(true)
+            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                menu?.clear()
 
-    customSelectionActionModeCallback = object : ActionMode.Callback {
-          override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-              customActionMode = mode
-              return true
-          }
+                val selectionStart = selectionStart
+                val selectionEnd = selectionEnd
 
-          override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-              menu?.clear()
-              val selectionStart = selectionStart
-              val selectionEnd = selectionEnd
+                if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
+                    lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
 
-              if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
-                  lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
-                  menuOptions.forEachIndexed { index, option ->
-                      menu?.add(0, index, index, option)
-                  }
-                  sendSelectionEvent(lastSelectedText, "selection")
-                  return true
-              }
-              return false
-          }
+                    menuOptions.forEachIndexed { index, option ->
+                        menu?.add(0, index, index, option)
+                    }
 
-          override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
-              item?.let {
-                  sendSelectionEvent(lastSelectedText, it.title.toString())
-                  mode?.finish()
-                  return true
-              }
-              return false
-          }
+                    sendSelectionEvent(lastSelectedText, "selection")
+                    return true
+                }
+                return false
+            }
 
-          override fun onDestroyActionMode(mode: ActionMode?) {
-              customActionMode = null
-          }
+            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+                item?.let {
+                    val menuItemText = it.title.toString()
+                    sendSelectionEvent(lastSelectedText, menuItemText)
+                    mode?.finish()
+                    return true
+                }
+                return false
+            }
+
+            override fun onDestroyActionMode(mode: ActionMode?) {
+                customActionMode = null
+            }
         }
     }
 
@@ -155,9 +154,7 @@ class AdvancedTextView : TextView {
 
         val spannableString = SpannableString(currentText)
 
-        // Apply spans efficiently
         wordPositions.forEach { wordPos ->
-            // Apply highlights
             highlightedWords.find { it.index == wordPos.index }?.let { highlightedWord ->
                 val color = parseColor(highlightedWord.highlightColor)
                 spannableString.setSpan(
@@ -168,7 +165,6 @@ class AdvancedTextView : TextView {
                 )
             }
 
-            // Apply indicator color
             if (wordPos.index == indicatorWordIndex) {
                 spannableString.setSpan(
                     ForegroundColorSpan(Color.parseColor(textColor)),
@@ -178,7 +174,6 @@ class AdvancedTextView : TextView {
                 )
             }
 
-            // Make words clickable
             spannableString.setSpan(
                 WordClickableSpan(wordPos.index, wordPos.word),
                 wordPos.start,
@@ -187,7 +182,6 @@ class AdvancedTextView : TextView {
             )
         }
 
-        // Use post to ensure UI thread and avoid layout issues
         post {
             setText(spannableString, BufferType.SPANNABLE)
             Log.d(TAG, "Text updated with ${wordPositions.size} spans")
@@ -224,14 +218,11 @@ class AdvancedTextView : TextView {
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
-            Log.d(TAG, "Word clicked: '$word' (index=$wordIndex)")
-            val spannable = widget as? TextView
-            spannable?.text?.let {
-                if (it is android.text.Spannable) {
-                    Selection.removeSelection(it)
-                }
+            Log.d(TAG, "WordClickableSpan onClick triggered: '$word' (index=$wordIndex)")
+
+            widget.post {
+                sendWordPressEvent(word, wordIndex)
             }
-            sendWordPressEvent(word, wordIndex)
         }
 
         override fun updateDrawState(ds: TextPaint) {
