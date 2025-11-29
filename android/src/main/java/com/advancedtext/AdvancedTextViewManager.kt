@@ -8,25 +8,10 @@ import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
-import com.facebook.react.uimanager.ViewManagerDelegate
 import com.facebook.react.uimanager.annotations.ReactProp
-import com.facebook.react.viewmanagers.AdvancedTextViewManagerInterface
-import com.facebook.react.viewmanagers.AdvancedTextViewManagerDelegate
-import com.facebook.react.uimanager.PixelUtil
 
 @ReactModule(name = AdvancedTextViewManager.NAME)
-class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
-    AdvancedTextViewManagerInterface<AdvancedTextView> {
-
-    private val mDelegate: ViewManagerDelegate<AdvancedTextView>
-
-    init {
-        mDelegate = AdvancedTextViewManagerDelegate(this)
-    }
-
-    override fun getDelegate(): ViewManagerDelegate<AdvancedTextView>? {
-        return mDelegate
-    }
+class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
 
     override fun getName(): String {
         return NAME
@@ -40,17 +25,18 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
         )
         // Set default text color to black to ensure visibility
         view.setTextColor(Color.BLACK)
+        android.util.Log.d(NAME, "createViewInstance: View created")
         return view
     }
 
     @ReactProp(name = "text")
-    override fun setText(view: AdvancedTextView?, text: String?) {
-        android.util.Log.d("AdvancedTextViewManager", "setText called with: '$text'")
+    fun setText(view: AdvancedTextView?, text: String?) {
+        android.util.Log.d(NAME, "setText called with: '$text'")
         view?.setAdvancedText(text ?: "")
     }
 
     @ReactProp(name = "highlightedWords")
-    override fun setHighlightedWords(view: AdvancedTextView?, highlightedWords: ReadableArray?) {
+    fun setHighlightedWords(view: AdvancedTextView?, highlightedWords: ReadableArray?) {
         if (highlightedWords == null) {
             view?.setHighlightedWords(emptyList())
             return
@@ -70,11 +56,12 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
                 }
             }
         }
+        android.util.Log.d(NAME, "setHighlightedWords: ${words.size} words")
         view?.setHighlightedWords(words)
     }
 
     @ReactProp(name = "menuOptions")
-    override fun setMenuOptions(view: AdvancedTextView?, menuOptions: ReadableArray?) {
+    fun setMenuOptions(view: AdvancedTextView?, menuOptions: ReadableArray?) {
         if (menuOptions == null) {
             view?.setMenuOptions(emptyList())
             return
@@ -86,25 +73,26 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>(),
                 options.add(option)
             }
         }
+        android.util.Log.d(NAME, "setMenuOptions: ${options.size} options")
         view?.setMenuOptions(options)
     }
 
     @ReactProp(name = "indicatorWordIndex")
-    override fun setIndicatorWordIndex(view: AdvancedTextView?, index: Int) {
+    fun setIndicatorWordIndex(view: AdvancedTextView?, index: Int) {
+        android.util.Log.d(NAME, "setIndicatorWordIndex: $index")
         view?.setIndicatorWordIndex(if (index >= 0) index else -1)
     }
 
     @ReactProp(name = "color", customType = "Color")
     fun setColor(view: AdvancedTextView?, color: Int?) {
-        android.util.Log.d("AdvancedTextViewManager", "setColor called with: $color")
+        android.util.Log.d(NAME, "setColor called with: $color")
         view?.setTextColor(color ?: Color.BLACK)
     }
 
     @ReactProp(name = "fontSize")
     fun setFontSize(view: AdvancedTextView?, fontSize: Float) {
-        android.util.Log.d("AdvancedTextViewManager", "setFontSize called with: $fontSize")
+        android.util.Log.d(NAME, "setFontSize called with: $fontSize")
         if (fontSize > 0) {
-            // Convert from React Native points to Android pixels
             view?.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize)
         }
     }
