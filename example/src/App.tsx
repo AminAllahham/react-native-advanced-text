@@ -1,12 +1,7 @@
-import { View, StyleSheet } from 'react-native';
-import { AdvancedTextView } from 'react-native-advanced-text';
+import { StyleSheet, View } from 'react-native';
 
 export default function App() {
-  return (
-    <View style={styles.container}>
-      <AdvancedTextView color="#32a852" style={styles.box} />
-    </View>
-  );
+  return <View style={styles.container} />;
 }
 
 const styles = StyleSheet.create({
