@@ -86,7 +86,9 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
     @ReactProp(name = "color", customType = "Color")
     fun setColor(view: AdvancedTextView?, color: Int?) {
         android.util.Log.d(NAME, "setColor called with: $color")
-        view?.setTextColor(color ?: Color.BLACK)
+        if (color != null) {
+            view?.setAdvancedTextColor(color)
+        }
     }
 
     @ReactProp(name = "fontSize")

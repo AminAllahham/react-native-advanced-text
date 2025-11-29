@@ -32,6 +32,7 @@ class AdvancedTextView : TextView {
     private var lastSelectedText: String = ""
     private var customActionMode: ActionMode? = null
     private var currentText: String = ""
+    private var textColor: String = "#000000"
 
     // Cache for word positions to avoid recalculating
     private var wordPositions: List<WordPosition> = emptyList()
@@ -88,6 +89,12 @@ class AdvancedTextView : TextView {
                 customActionMode = null
             }
         }
+    }
+
+
+    fun setAdvancedTextColor(colorInt: Int) {
+        textColor = String.format("#%06X", 0xFFFFFF and colorInt)
+        updateTextWithHighlights()
     }
 
     fun setAdvancedText(text: String) {
@@ -165,7 +172,7 @@ class AdvancedTextView : TextView {
             // Apply indicator color
             if (wordPos.index == indicatorWordIndex) {
                 spannableString.setSpan(
-                    ForegroundColorSpan(Color.RED),
+                    ForegroundColorSpan(Color.parseColor(textColor)),
                     wordPos.start,
                     wordPos.end,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -213,8 +220,8 @@ class AdvancedTextView : TextView {
     }
 
     private inner class WordClickableSpan(
-        private val wordIndex: Int,
-        private val word: String
+    private val wordIndex: Int,
+    private val word: String
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
@@ -231,6 +238,7 @@ class AdvancedTextView : TextView {
         override fun updateDrawState(ds: TextPaint) {
             super.updateDrawState(ds)
             ds.isUnderlineText = false
+            ds.color = Color.parseColor(textColor)
         }
     }
 
