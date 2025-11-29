@@ -42,52 +42,51 @@ class AdvancedTextView : TextView {
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int) : super(context, attrs, defStyleAttr) { init() }
 
     private fun init() {
-        Log.d(TAG, "AdvancedTextView initialized")
+    Log.d(TAG, "AdvancedTextView initialized")
 
-        // Set default properties
-        textSize = 16f
-        setPadding(16, 16, 16, 16)
-        movementMethod = LinkMovementMethod.getInstance()
-        setTextIsSelectable(true)
+    textSize = 16f
+    setPadding(16, 16, 16, 16)
 
-        customSelectionActionModeCallback = object : ActionMode.Callback {
-            override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                customActionMode = mode
-                return true
-            }
+    movementMethod = ClickableMovementMethod.getInstance()
+    isClickable = false
+    isLongClickable = false
 
-            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                menu?.clear()
+    setTextIsSelectable(true)
 
-                val selectionStart = selectionStart
-                val selectionEnd = selectionEnd
+    customSelectionActionModeCallback = object : ActionMode.Callback {
+          override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+              customActionMode = mode
+              return true
+          }
 
-                if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
-                    lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
+          override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+              menu?.clear()
+              val selectionStart = selectionStart
+              val selectionEnd = selectionEnd
 
-                    menuOptions.forEachIndexed { index, option ->
-                        menu?.add(0, index, index, option)
-                    }
+              if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
+                  lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
+                  menuOptions.forEachIndexed { index, option ->
+                      menu?.add(0, index, index, option)
+                  }
+                  sendSelectionEvent(lastSelectedText, "selection")
+                  return true
+              }
+              return false
+          }
 
-                    sendSelectionEvent(lastSelectedText, "selection")
-                    return true
-                }
-                return false
-            }
+          override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+              item?.let {
+                  sendSelectionEvent(lastSelectedText, it.title.toString())
+                  mode?.finish()
+                  return true
+              }
+              return false
+          }
 
-            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
-                item?.let {
-                    val menuItemText = it.title.toString()
-                    sendSelectionEvent(lastSelectedText, menuItemText)
-                    mode?.finish()
-                    return true
-                }
-                return false
-            }
-
-            override fun onDestroyActionMode(mode: ActionMode?) {
-                customActionMode = null
-            }
+          override fun onDestroyActionMode(mode: ActionMode?) {
+              customActionMode = null
+          }
         }
     }
 
