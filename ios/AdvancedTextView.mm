@@ -9,13 +9,61 @@
 
 using namespace facebook::react;
 
+
+// Forward declaration
+@class AdvancedTextView;
+
 @interface AdvancedTextView () <RCTAdvancedTextViewViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
 
-@property (nonatomic, strong) UITextView *textView;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *wordRanges;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIColor *> *highlightColors;
 @property (nonatomic, strong) NSArray<NSString *> *menuOptions;
 @property (nonatomic, assign) NSInteger indicatorWordIndex;
+
+// ✅ ADD THIS LINE
+- (void)handleCustomMenuAction:(UIMenuItem *)sender;
+
+@end
+
+
+// Custom UITextView subclass to override menu behavior
+@interface CustomTextView : UITextView
+@property (nonatomic, weak) AdvancedTextView *parentView;
+@end
+
+@implementation CustomTextView
+
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender
+{
+    NSLog(@"[CustomTextView] canPerformAction: %@", NSStringFromSelector(action));
+
+    // Only allow our custom menu actions
+    if (action == @selector(handleCustomMenuAction:)) {
+        NSLog(@"[CustomTextView] ✅ Allowing custom action");
+        return YES;
+    }
+
+    // Block ALL system actions
+    NSLog(@"[CustomTextView] ❌ Blocking system action: %@", NSStringFromSelector(action));
+    return NO;
+}
+
+- (void)handleCustomMenuAction:(UIMenuItem *)sender
+{
+    // Forward to parent view
+    if (self.parentView) {
+
+        [self.parentView handleCustomMenuAction:sender];
+    }
+}
+
+@end
+
+
+
+@interface AdvancedTextView () <RCTAdvancedTextViewViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
+
+@property (nonatomic, strong) CustomTextView *textView;
 
 @end
 
@@ -56,9 +104,10 @@ using namespace facebook::react;
 {
     NSLog(@"[AdvancedTextView] setupTextView called");
     @try {
-        _textView = [[UITextView alloc] initWithFrame:self.bounds];
+        _textView = [[CustomTextView alloc] initWithFrame:self.bounds];
+        _textView.parentView = self;
         _textView.editable = NO;
-        _textView.selectable = YES; // Allow text selection
+        _textView.selectable = YES;
         _textView.scrollEnabled = YES;
         _textView.backgroundColor = [UIColor clearColor];
         _textView.textContainerInset = UIEdgeInsetsMake(8, 8, 8, 8);
@@ -107,21 +156,18 @@ using namespace facebook::react;
         // Check text change
         if (oldViewProps.text != newViewProps.text) {
             textChanged = YES;
-            NSLog(@"[AdvancedTextView] Text changed: %s", newViewProps.text.c_str());
+            NSLog(@"[AdvancedTextView] Text changed");
         }
 
         // Check highlighted words change
         if (oldViewProps.highlightedWords.size() != newViewProps.highlightedWords.size()) {
             highlightsChanged = YES;
-            NSLog(@"[AdvancedTextView] Highlights size changed: %zu -> %zu",
-                  oldViewProps.highlightedWords.size(), newViewProps.highlightedWords.size());
         } else {
             for (size_t i = 0; i < oldViewProps.highlightedWords.size(); i++) {
                 const auto &oldHW = oldViewProps.highlightedWords[i];
                 const auto &newHW = newViewProps.highlightedWords[i];
                 if (oldHW.index != newHW.index || oldHW.highlightColor != newHW.highlightColor) {
                     highlightsChanged = YES;
-                    NSLog(@"[AdvancedTextView] Highlight changed at index %zu", i);
                     break;
                 }
             }
@@ -130,13 +176,10 @@ using namespace facebook::react;
         // Check menu options change
         if (oldViewProps.menuOptions.size() != newViewProps.menuOptions.size()) {
             menuChanged = YES;
-            NSLog(@"[AdvancedTextView] Menu options size changed: %zu -> %zu",
-                  oldViewProps.menuOptions.size(), newViewProps.menuOptions.size());
         } else {
             for (size_t i = 0; i < oldViewProps.menuOptions.size(); i++) {
                 if (oldViewProps.menuOptions[i] != newViewProps.menuOptions[i]) {
                     menuChanged = YES;
-                    NSLog(@"[AdvancedTextView] Menu option changed at index %zu", i);
                     break;
                 }
             }
@@ -145,8 +188,6 @@ using namespace facebook::react;
         // Check indicator change
         if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
             indicatorChanged = YES;
-            NSLog(@"[AdvancedTextView] Indicator changed: %d -> %d",
-                  oldViewProps.indicatorWordIndex, newViewProps.indicatorWordIndex);
         }
 
         // Apply updates
@@ -171,8 +212,7 @@ using namespace facebook::react;
         [super updateProps:props oldProps:oldProps];
         NSLog(@"[AdvancedTextView] updateProps completed successfully");
     } @catch (NSException *exception) {
-        NSLog(@"[AdvancedTextView] Exception in updateProps: %@, reason: %@",
-              exception.name, exception.reason);
+        NSLog(@"[AdvancedTextView] Exception in updateProps: %@", exception.reason);
         @throw;
     }
 }
@@ -187,9 +227,7 @@ using namespace facebook::react;
             return;
         }
 
-        // IMPORTANT: Set the text first!
         _textView.text = text;
-        NSLog(@"[AdvancedTextView] Set textView.text with length: %lu", (unsigned long)_textView.text.length);
 
         // Parse text into words and their ranges
         [_wordRanges removeAllObjects];
@@ -250,10 +288,6 @@ using namespace facebook::react;
 
             if (color) {
                 _highlightColors[@(index)] = color;
-                NSLog(@"[AdvancedTextView] Added highlight for word %ld with color %@",
-                      (long)index, colorString);
-            } else {
-                NSLog(@"[AdvancedTextView] Failed to parse color: %@", colorString);
             }
         }
 
@@ -283,22 +317,14 @@ using namespace facebook::react;
 
 - (void)updateTextAppearance
 {
-    NSLog(@"[AdvancedTextView] updateTextAppearance called");
     @try {
-        if (_wordRanges.count == 0) {
-            NSLog(@"[AdvancedTextView] No word ranges, skipping appearance update");
-            return;
-        }
-
-        if (!_textView.text || _textView.text.length == 0) {
-            NSLog(@"[AdvancedTextView] TextView has no text");
+        if (_wordRanges.count == 0 || !_textView.text || _textView.text.length == 0) {
             return;
         }
 
         NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc]
                                                         initWithString:_textView.text];
 
-        // Apply default attributes
         [attributedString addAttribute:NSFontAttributeName
                                  value:[UIFont systemFontOfSize:16]
                                  range:NSMakeRange(0, attributedString.length)];
@@ -307,17 +333,12 @@ using namespace facebook::react;
                                  value:[UIColor labelColor]
                                  range:NSMakeRange(0, attributedString.length)];
 
-        // Apply highlights
         for (NSDictionary *wordInfo in _wordRanges) {
             NSNumber *index = wordInfo[@"index"];
             NSValue *rangeValue = wordInfo[@"range"];
             NSRange range = [rangeValue rangeValue];
 
-            // Validate range
             if (range.location + range.length > attributedString.length) {
-                NSLog(@"[AdvancedTextView] Invalid range at index %@: {%lu, %lu} for string length %lu",
-                      index, (unsigned long)range.location, (unsigned long)range.length,
-                      (unsigned long)attributedString.length);
                 continue;
             }
 
@@ -328,9 +349,7 @@ using namespace facebook::react;
                                          range:range];
             }
 
-            // Add background color indicator for indicated word
             if (_indicatorWordIndex >= 0 && [index integerValue] == _indicatorWordIndex) {
-                // Use a semi-transparent blue background for the current word
                 UIColor *indicatorColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.3];
                 [attributedString addAttribute:NSBackgroundColorAttributeName
                                          value:indicatorColor
@@ -339,25 +358,18 @@ using namespace facebook::react;
         }
 
         _textView.attributedText = attributedString;
-        NSLog(@"[AdvancedTextView] Text appearance updated successfully");
     } @catch (NSException *exception) {
-        NSLog(@"[AdvancedTextView] Exception in updateTextAppearance: %@, reason: %@",
-              exception.name, exception.reason);
-        @throw;
+        NSLog(@"[AdvancedTextView] Exception in updateTextAppearance: %@", exception.reason);
     }
 }
 
 - (void)handleTap:(UITapGestureRecognizer *)gesture
 {
-    NSLog(@"[AdvancedTextView] handleTap called");
     @try {
         if (gesture.state != UIGestureRecognizerStateEnded) return;
 
         CGPoint location = [gesture locationInView:_textView];
         NSInteger wordIndex = [self wordIndexAtPoint:location];
-
-        NSLog(@"[AdvancedTextView] Tap at point: {%.2f, %.2f}, word index: %ld",
-              location.x, location.y, (long)wordIndex);
 
         // Dismiss any existing selection
         _textView.selectedTextRange = nil;
@@ -366,7 +378,6 @@ using namespace facebook::react;
             NSDictionary *wordInfo = _wordRanges[wordIndex];
             NSString *word = wordInfo[@"word"];
 
-            NSLog(@"[AdvancedTextView] Word pressed: %@", word);
             [self emitWordPressEvent:word index:wordIndex];
         }
     } @catch (NSException *exception) {
@@ -376,22 +387,13 @@ using namespace facebook::react;
 
 #pragma mark - UITextViewDelegate
 
-- (BOOL)textView:(UITextView *)textView shouldInteractWithURL:(NSURL *)URL inRange:(NSRange)characterRange interaction:(UITextItemInteraction)interaction
-{
-    return YES;
-}
-
 - (void)textViewDidChangeSelection:(UITextView *)textView
 {
-    NSLog(@"[AdvancedTextView] Selection changed");
-
-    // Get selected text
     NSString *selectedText = [textView.text substringWithRange:textView.selectedRange];
 
     if (selectedText.length > 0) {
         NSLog(@"[AdvancedTextView] Selected text: %@", selectedText);
 
-        // Add custom menu items
         if (_menuOptions && _menuOptions.count > 0) {
             [self setupCustomMenuItems];
         }
@@ -400,7 +402,7 @@ using namespace facebook::react;
 
 - (void)setupCustomMenuItems
 {
-    NSLog(@"[AdvancedTextView] Setting up custom menu items");
+    NSLog(@"[AdvancedTextView] Setting up %lu custom menu items", (unsigned long)_menuOptions.count);
 
     UIMenuController *menuController = [UIMenuController sharedMenuController];
     NSMutableArray *customItems = [NSMutableArray array];
@@ -409,53 +411,34 @@ using namespace facebook::react;
         UIMenuItem *item = [[UIMenuItem alloc] initWithTitle:option
                                                       action:@selector(handleCustomMenuAction:)];
         [customItems addObject:item];
+        NSLog(@"[AdvancedTextView] Created menu item: %@", option);
     }
 
     menuController.menuItems = customItems;
 }
+
 
 - (void)handleCustomMenuAction:(UIMenuItem *)sender
 {
     NSLog(@"[AdvancedTextView] Custom menu action: %@", sender.title);
 
     NSString *selectedText = [_textView.text substringWithRange:_textView.selectedRange];
+
     [self emitSelectionEvent:selectedText menuOption:sender.title];
 
-    // Clear selection after action
-    _textView.selectedTextRange = nil;
-}
-
-- (BOOL)canPerformAction:(SEL)action withSender:(id)sender
-{
-    // Allow custom menu items
-    if (action == @selector(handleCustomMenuAction:)) {
-        return YES;
-    }
-
-    // Allow default actions (copy, etc.)
-    if (action == @selector(copy:) ||
-        action == @selector(selectAll:) ||
-        action == @selector(select:)) {
-        return [super canPerformAction:action withSender:sender];
-    }
-
-    return NO;
-}
-
-- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture
-{
-    // Removed - using native iOS text selection menu instead
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self->_textView.selectedTextRange = nil;
+        NSLog(@"[AdvancedTextView] Selection cleared");
+    });
 }
 
 - (NSInteger)wordIndexAtPoint:(CGPoint)point
 {
     @try {
         if (!_textView.layoutManager || !_textView.textContainer) {
-            NSLog(@"[AdvancedTextView] Layout manager or text container is nil");
             return -1;
         }
 
-        // Adjust point for text container insets
         point.x -= _textView.textContainerInset.left;
         point.y -= _textView.textContainerInset.top;
 
@@ -466,9 +449,6 @@ using namespace facebook::react;
                                                            inTextContainer:textContainer
                                   fractionOfDistanceBetweenInsertionPoints:nil];
 
-        NSLog(@"[AdvancedTextView] Character index at point: %lu", (unsigned long)characterIndex);
-
-        // Find which word this character belongs to
         for (NSDictionary *wordInfo in _wordRanges) {
             NSValue *rangeValue = wordInfo[@"range"];
             NSRange range = [rangeValue rangeValue];
@@ -480,20 +460,8 @@ using namespace facebook::react;
 
         return -1;
     } @catch (NSException *exception) {
-        NSLog(@"[AdvancedTextView] Exception in wordIndexAtPoint: %@", exception);
         return -1;
     }
-}
-
-- (void)showContextMenuForWord:(NSString *)word atIndex:(NSInteger)index location:(CGPoint)location
-{
-    // Removed - using native iOS text selection menu instead
-}
-
-- (UIViewController *)findViewController
-{
-    // Removed - no longer needed
-    return nil;
 }
 
 - (void)emitWordPressEvent:(NSString *)word index:(NSInteger)index
@@ -508,9 +476,6 @@ using namespace facebook::react;
             event.index = static_cast<int>(index);
 
             emitter->onWordPress(event);
-            NSLog(@"[AdvancedTextView] Word press event emitted successfully");
-        } else {
-            NSLog(@"[AdvancedTextView] Event emitter is null");
         }
     } @catch (NSException *exception) {
         NSLog(@"[AdvancedTextView] Exception in emitWordPressEvent: %@", exception);
@@ -529,9 +494,6 @@ using namespace facebook::react;
             event.event = [option UTF8String];
 
             emitter->onSelection(event);
-            NSLog(@"[AdvancedTextView] Selection event emitted successfully");
-        } else {
-            NSLog(@"[AdvancedTextView] Event emitter is null");
         }
     } @catch (NSException *exception) {
         NSLog(@"[AdvancedTextView] Exception in emitSelectionEvent: %@", exception);
@@ -540,7 +502,6 @@ using namespace facebook::react;
 
 - (void)layoutSubviews
 {
-    NSLog(@"[AdvancedTextView] layoutSubviews called");
     @try {
         [super layoutSubviews];
         _textView.frame = self.bounds;
@@ -553,7 +514,6 @@ using namespace facebook::react;
 {
     @try {
         if (!stringToConvert || [stringToConvert length] == 0) {
-            NSLog(@"[AdvancedTextView] Empty color string");
             return nil;
         }
 
@@ -562,7 +522,6 @@ using namespace facebook::react;
 
         unsigned hex;
         if (![stringScanner scanHexInt:&hex]) {
-            NSLog(@"[AdvancedTextView] Failed to parse hex color: %@", stringToConvert);
             return nil;
         }
 
@@ -572,14 +531,12 @@ using namespace facebook::react;
 
         return [UIColor colorWithRed:r / 255.0f green:g / 255.0f blue:b / 255.0f alpha:1.0f];
     } @catch (NSException *exception) {
-        NSLog(@"[AdvancedTextView] Exception in hexStringToColor: %@", exception);
         return nil;
     }
 }
 
 Class<RCTComponentViewProtocol> AdvancedTextViewCls(void)
 {
-    NSLog(@"[AdvancedTextView] AdvancedTextViewCls called");
     return AdvancedTextView.class;
 }
 
