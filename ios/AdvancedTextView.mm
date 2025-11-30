@@ -10,7 +10,6 @@
 using namespace facebook::react;
 
 
-// Forward declaration
 @class AdvancedTextView;
 
 @interface AdvancedTextView () <RCTAdvancedTextViewViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
@@ -19,14 +18,17 @@ using namespace facebook::react;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIColor *> *highlightColors;
 @property (nonatomic, strong) NSArray<NSString *> *menuOptions;
 @property (nonatomic, assign) NSInteger indicatorWordIndex;
+@property (nonatomic, assign) CGFloat fontSize;
+@property (nonatomic, strong) NSString *fontWeight;
+@property (nonatomic, strong) UIColor *textColor;
+@property (nonatomic, strong) NSString *textAlign;
+@property (nonatomic, strong) NSString *fontFamily;
 
-// ✅ ADD THIS LINE
 - (void)handleCustomMenuAction:(UIMenuItem *)sender;
 
 @end
 
 
-// Custom UITextView subclass to override menu behavior
 @interface CustomTextView : UITextView
 @property (nonatomic, weak) AdvancedTextView *parentView;
 @end
@@ -37,22 +39,18 @@ using namespace facebook::react;
 {
     NSLog(@"[CustomTextView] canPerformAction: %@", NSStringFromSelector(action));
 
-    // Only allow our custom menu actions
     if (action == @selector(handleCustomMenuAction:)) {
         NSLog(@"[CustomTextView] ✅ Allowing custom action");
         return YES;
     }
 
-    // Block ALL system actions
     NSLog(@"[CustomTextView] ❌ Blocking system action: %@", NSStringFromSelector(action));
     return NO;
 }
 
 - (void)handleCustomMenuAction:(UIMenuItem *)sender
 {
-    // Forward to parent view
     if (self.parentView) {
-
         [self.parentView handleCustomMenuAction:sender];
     }
 }
@@ -86,6 +84,11 @@ using namespace facebook::react;
             _wordRanges = [NSMutableArray array];
             _highlightColors = [NSMutableDictionary dictionary];
             _indicatorWordIndex = -1;
+            _fontSize = 16.0;
+            _fontWeight = @"normal";
+            _textColor = [UIColor labelColor];
+            _textAlign = @"left";
+            _fontFamily = @"System";
 
             [self setupTextView];
             [self setupGestureRecognizers];
@@ -127,7 +130,6 @@ using namespace facebook::react;
 {
     NSLog(@"[AdvancedTextView] setupGestureRecognizers called");
     @try {
-        // Single tap for word selection
         UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc]
                                               initWithTarget:self
                                               action:@selector(handleTap:)];
@@ -152,14 +154,44 @@ using namespace facebook::react;
         BOOL highlightsChanged = NO;
         BOOL menuChanged = NO;
         BOOL indicatorChanged = NO;
+        BOOL styleChanged = NO;
 
-        // Check text change
+        if (oldViewProps.fontSize != newViewProps.fontSize && newViewProps.fontSize) {
+            NSLog(@"[AdvancedTextView] Updating fontSize to: %f", newViewProps.fontSize);
+            _fontSize = static_cast<CGFloat>(newViewProps.fontSize);
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.textAlign != newViewProps.textAlign && !newViewProps.textAlign.empty()) {
+            NSLog(@"[AdvancedTextView] Updating textAlign to: %s", newViewProps.textAlign.c_str());
+            _textAlign = [NSString stringWithUTF8String:newViewProps.textAlign.c_str()];
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.fontWeight != newViewProps.fontWeight && !newViewProps.fontWeight.empty()) {
+            NSLog(@"[AdvancedTextView] Updating fontWeight to: %s", newViewProps.fontWeight.c_str());
+            _fontWeight = [NSString stringWithUTF8String:newViewProps.fontWeight.c_str()];
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.fontFamily != newViewProps.fontFamily && !newViewProps.fontFamily.empty()) {
+            NSLog(@"[AdvancedTextView] Updating fontFamily to: %s", newViewProps.fontFamily.c_str());
+            _fontFamily = [NSString stringWithUTF8String:newViewProps.fontFamily.c_str()];
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.color != newViewProps.color && !newViewProps.color.empty()) {
+            NSLog(@"[AdvancedTextView] Updating color to: %s", newViewProps.color.c_str());
+            NSString *colorStr = [NSString stringWithUTF8String:newViewProps.color.c_str()];
+            _textColor = [self hexStringToColor:colorStr];
+            styleChanged = YES;
+        }
+
         if (oldViewProps.text != newViewProps.text) {
             textChanged = YES;
             NSLog(@"[AdvancedTextView] Text changed");
         }
 
-        // Check highlighted words change
         if (oldViewProps.highlightedWords.size() != newViewProps.highlightedWords.size()) {
             highlightsChanged = YES;
         } else {
@@ -173,7 +205,6 @@ using namespace facebook::react;
             }
         }
 
-        // Check menu options change
         if (oldViewProps.menuOptions.size() != newViewProps.menuOptions.size()) {
             menuChanged = YES;
         } else {
@@ -185,12 +216,10 @@ using namespace facebook::react;
             }
         }
 
-        // Check indicator change
         if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
             indicatorChanged = YES;
         }
 
-        // Apply updates
         if (textChanged) {
             NSString *text = [NSString stringWithUTF8String:newViewProps.text.c_str()];
             [self updateTextContent:text];
@@ -206,6 +235,11 @@ using namespace facebook::react;
 
         if (indicatorChanged) {
             _indicatorWordIndex = newViewProps.indicatorWordIndex;
+            [self updateTextAppearance];
+        }
+
+        if (styleChanged) {
+            NSLog(@"[AdvancedTextView] Style properties changed, updating appearance");
             [self updateTextAppearance];
         }
 
@@ -229,7 +263,6 @@ using namespace facebook::react;
 
         _textView.text = text;
 
-        // Parse text into words and their ranges
         [_wordRanges removeAllObjects];
 
         NSRange searchRange = NSMakeRange(0, text.length);
@@ -237,7 +270,6 @@ using namespace facebook::react;
 
         NSInteger wordIndex = 0;
         while (searchRange.location < text.length) {
-            // Skip whitespace
             while (searchRange.location < text.length &&
                    [whitespaceSet characterIsMember:[text characterAtIndex:searchRange.location]]) {
                 searchRange.location++;
@@ -246,7 +278,6 @@ using namespace facebook::react;
 
             if (searchRange.location >= text.length) break;
 
-            // Find word end
             NSUInteger wordStart = searchRange.location;
             while (searchRange.location < text.length &&
                    ![whitespaceSet characterIsMember:[text characterAtIndex:searchRange.location]]) {
@@ -318,20 +349,40 @@ using namespace facebook::react;
 - (void)updateTextAppearance
 {
     @try {
-        if (_wordRanges.count == 0 || !_textView.text || _textView.text.length == 0) {
+        if (!_textView.text || _textView.text.length == 0) {
             return;
         }
 
         NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc]
                                                         initWithString:_textView.text];
 
+
+        UIFont *font = nil;
+
+        if (_fontFamily && _fontFamily.length > 0) {
+            font = [UIFont fontWithName:_fontFamily size:_fontSize > 0 ? _fontSize : 16.0];
+        }
+
+        if (!font) {
+            if (_fontWeight && [_fontWeight.lowercaseString isEqualToString:@"bold"]) {
+                font = [UIFont boldSystemFontOfSize:_fontSize > 0 ? _fontSize : 16.0];
+            } else if (_fontWeight && [_fontWeight.lowercaseString isEqualToString:@"italic"]) {
+                font = [UIFont italicSystemFontOfSize:_fontSize > 0 ? _fontSize : 16.0];
+            } else {
+                font = [UIFont systemFontOfSize:_fontSize > 0 ? _fontSize : 16.0];
+            }
+        }
+
         [attributedString addAttribute:NSFontAttributeName
-                                 value:[UIFont systemFontOfSize:16]
+                                 value:font
                                  range:NSMakeRange(0, attributedString.length)];
 
+
+        UIColor *color = _textColor ?: [UIColor labelColor];
         [attributedString addAttribute:NSForegroundColorAttributeName
-                                 value:[UIColor labelColor]
+                                 value:color
                                  range:NSMakeRange(0, attributedString.length)];
+
 
         for (NSDictionary *wordInfo in _wordRanges) {
             NSNumber *index = wordInfo[@"index"];
@@ -358,10 +409,24 @@ using namespace facebook::react;
         }
 
         _textView.attributedText = attributedString;
+
+        if (_textAlign) {
+            if ([_textAlign.lowercaseString isEqualToString:@"center"]) {
+                _textView.textAlignment = NSTextAlignmentCenter;
+            } else if ([_textAlign.lowercaseString isEqualToString:@"right"]) {
+                _textView.textAlignment = NSTextAlignmentRight;
+            } else {
+                _textView.textAlignment = NSTextAlignmentLeft;
+            }
+        } else {
+            _textView.textAlignment = NSTextAlignmentLeft;
+        }
+
     } @catch (NSException *exception) {
         NSLog(@"[AdvancedTextView] Exception in updateTextAppearance: %@", exception.reason);
     }
 }
+
 
 - (void)handleTap:(UITapGestureRecognizer *)gesture
 {
@@ -371,7 +436,6 @@ using namespace facebook::react;
         CGPoint location = [gesture locationInView:_textView];
         NSInteger wordIndex = [self wordIndexAtPoint:location];
 
-        // Dismiss any existing selection
         _textView.selectedTextRange = nil;
 
         if (wordIndex >= 0 && wordIndex < _wordRanges.count) {
@@ -462,6 +526,31 @@ using namespace facebook::react;
     } @catch (NSException *exception) {
         return -1;
     }
+}
+
+- (void)setFontSize:(CGFloat)fontSize {
+    _fontSize = fontSize;
+    [self updateTextAppearance];
+}
+
+- (void)setFontWeight:(NSString *)fontWeight {
+    _fontWeight = fontWeight;
+    [self updateTextAppearance];
+}
+
+- (void)setTextColor:(UIColor *)textColor {
+    _textColor = textColor;
+    [self updateTextAppearance];
+}
+
+- (void)setTextAlign:(NSString *)textAlign {
+    _textAlign = textAlign;
+    [self updateTextAppearance];
+}
+
+- (void)setFontFamily:(NSString *)fontFamily {
+    _fontFamily = fontFamily;
+    [self updateTextAppearance];
 }
 
 - (void)emitWordPressEvent:(NSString *)word index:(NSInteger)index
