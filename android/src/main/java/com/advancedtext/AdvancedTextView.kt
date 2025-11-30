@@ -117,12 +117,13 @@ class AdvancedTextView : TextView {
     fun setAdvancedTextSize(size: Float) {
         if (fontSize == size) return
         fontSize = size
-        updateTextWithHighlights() // ensures size change is applied with highlights
+        updateTextWithHighlights()
     }
 
     fun setAdvancedFontWeight(weight: String) {
         if (fontWeight == weight) return
         fontWeight = weight
+        updateTextWithHighlights()
     }
 
     fun setAdvancedTextAlign(align: String) {
