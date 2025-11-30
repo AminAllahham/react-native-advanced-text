@@ -20,6 +20,7 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.events.RCTEventEmitter
 import android.text.Selection
+import android.graphics.Typeface
 
 class AdvancedTextView : TextView {
 
