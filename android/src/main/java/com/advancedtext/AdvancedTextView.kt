@@ -32,6 +32,10 @@ class AdvancedTextView : TextView {
     private var customActionMode: ActionMode? = null
     private var currentText: String = ""
     private var textColor: String = "#000000"
+    private var fontSize: Float = 16f
+    private var fontWeight: String = "normal"
+    private var textAlign: String = "left"
+    private var fontFamily: String = "sans-serif"
 
     private var wordPositions: List<WordPosition> = emptyList()
 
@@ -46,7 +50,7 @@ class AdvancedTextView : TextView {
         setPadding(16, 16, 16, 16)
         movementMethod = LinkMovementMethod.getInstance()
         setTextIsSelectable(true)
-       
+
 
         customSelectionActionModeCallback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
@@ -90,10 +94,6 @@ class AdvancedTextView : TextView {
     }
 
 
-    fun setAdvancedTextColor(colorInt: Int) {
-        textColor = String.format("#%06X", 0xFFFFFF and colorInt)
-        updateTextWithHighlights()
-    }
 
     fun setAdvancedText(text: String) {
         if (currentText == text) {
@@ -105,6 +105,40 @@ class AdvancedTextView : TextView {
         currentText = text
         calculateWordPositions(text)
         updateTextWithHighlights()
+    }
+
+    fun setAdvancedTextColor(colorInt: Int) {
+          textColor = String.format("#%06X", 0xFFFFFF and colorInt)
+          updateTextWithHighlights()
+    }
+
+
+    fun setAdvancedTextSize(size: Float) {
+        if (fontSize == size) return
+        fontSize = size
+        updateTextWithHighlights() // ensures size change is applied with highlights
+    }
+
+    fun setAdvancedFontWeight(weight: String) {
+        if (fontWeight == weight) return
+        fontWeight = weight
+    }
+
+    fun setAdvancedTextAlign(align: String) {
+        if (textAlign == align) return
+        textAlign = align
+        when (align) {
+            "left" -> textAlignment = View.TEXT_ALIGNMENT_TEXT_START
+            "center" -> textAlignment = View.TEXT_ALIGNMENT_CENTER
+            "right" -> textAlignment = View.TEXT_ALIGNMENT_TEXT_END
+            else -> textAlignment = View.TEXT_ALIGNMENT_TEXT_START
+        }
+    }
+
+    fun setAdvancedFontFamily(family: String) {
+        if (fontFamily == family) return
+        fontFamily = family
+        typeface = Typeface.create(family, Typeface.NORMAL)
     }
 
     fun setMenuOptions(menuOptions: List<String>) {
@@ -180,6 +214,21 @@ class AdvancedTextView : TextView {
                 wordPos.end,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             )
+        }
+
+         textAlignment = when (textAlign) {
+            "left" -> View.TEXT_ALIGNMENT_TEXT_START
+            "center" -> View.TEXT_ALIGNMENT_CENTER
+            "right" -> View.TEXT_ALIGNMENT_TEXT_END
+            else -> View.TEXT_ALIGNMENT_TEXT_START
+        }
+
+        setTextSize(fontSize)
+
+        typeface = when (fontWeight) {
+            "bold" -> Typeface.create(fontFamily, Typeface.BOLD)
+            "italic" -> Typeface.create(fontFamily, Typeface.ITALIC)
+            else -> Typeface.create(fontFamily, Typeface.NORMAL)
         }
 
         post {

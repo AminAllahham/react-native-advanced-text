@@ -95,7 +95,31 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
     fun setFontSize(view: AdvancedTextView?, fontSize: Float) {
         android.util.Log.d(NAME, "setFontSize called with: $fontSize")
         if (fontSize > 0) {
-            view?.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize)
+            view?.setAdvancedTextSize(fontSize)
+        }
+    }
+
+    @ReactProp(name = "fontWeight")
+    fun setFontWeight(view: AdvancedTextView?, fontWeight: String?) {
+      android.util.Log.d(NAME, "setFontWeight called with: $fontWeight")
+        if (fontWeight != null) {
+            view?.setAdvancedFontWeight(fontWeight)
+        }
+    }
+
+    @ReactProp(name = "textAlign")
+    fun setTextAlign(view: AdvancedTextView?, textAlign: String?) {
+        android.util.Log.d(NAME, "setTextAlign called with: $textAlign")
+        if (textAlign != null) {
+            view?.setAdvancedTextAlign(textAlign)
+        }
+    }
+
+    @ReactProp(name = "fontFamily")
+    fun setFontFamily(view: AdvancedTextView?, fontFamily: String?) {
+        android.util.Log.d(NAME, "setFontFamily called with: $fontFamily")
+        if (fontFamily != null) {
+            view?.setAdvancedFontFamily(fontFamily)
         }
     }
 
