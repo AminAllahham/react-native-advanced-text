@@ -1,6 +1,6 @@
 # react-native-advanced-text
 
- Advanced text component for React Native with custom select options.
+ react-native-advanced-text is a powerful cross-platform text component for React Native that enables word-level interaction, dynamic highlighting, and custom selection actions.
 
 ## Installation
 
