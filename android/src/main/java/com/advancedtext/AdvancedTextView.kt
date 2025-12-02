@@ -2,10 +2,12 @@ package com.advancedtext
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Point
 import android.text.SpannableString
+import android.text.Spannable
 import android.text.Spanned
 import android.text.TextPaint
-import android.text.method.LinkMovementMethod
+import android.text.method.ArrowKeyMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
@@ -15,12 +17,14 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.MotionEvent
 import android.widget.TextView
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.uimanager.events.RCTEventEmitter
 import android.text.Selection
 import android.graphics.Typeface
+import androidx.core.text.getSpans
 
 class AdvancedTextView : TextView {
 
@@ -49,9 +53,9 @@ class AdvancedTextView : TextView {
 
         textSize = 16f
         setPadding(16, 16, 16, 16)
-        movementMethod = LinkMovementMethod.getInstance()
         setTextIsSelectable(true)
 
+        movementMethod = SmartMovementMethod
 
         customSelectionActionModeCallback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
@@ -94,8 +98,6 @@ class AdvancedTextView : TextView {
         }
     }
 
-
-
     fun setAdvancedText(text: String) {
         if (currentText == text) {
             Log.d(TAG, "Text unchanged, skipping update")
@@ -112,7 +114,6 @@ class AdvancedTextView : TextView {
           textColor = String.format("#%06X", 0xFFFFFF and colorInt)
           updateTextWithHighlights()
     }
-
 
     fun setAdvancedTextSize(size: Float) {
         if (fontSize == size) return
@@ -210,6 +211,7 @@ class AdvancedTextView : TextView {
                 )
             }
 
+            // Add clickable span for word clicks
             spannableString.setSpan(
                 WordClickableSpan(wordPos.index, wordPos.word),
                 wordPos.start,
@@ -264,16 +266,13 @@ class AdvancedTextView : TextView {
     }
 
     private inner class WordClickableSpan(
-    private val wordIndex: Int,
-    private val word: String
+        private val wordIndex: Int,
+        private val word: String
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
-            Log.d(TAG, "WordClickableSpan onClick triggered: '$word' (index=$wordIndex)")
-
-            widget.post {
-                sendWordPressEvent(word, wordIndex)
-            }
+            Log.d(TAG, "Word clicked: '$word' (index=$wordIndex)")
+            sendWordPressEvent(word, wordIndex)
         }
 
         override fun updateDrawState(ds: TextPaint) {
@@ -301,6 +300,56 @@ class AdvancedTextView : TextView {
     fun clearSelection() {
         (text as? android.text.Spannable)?.let {
             Selection.removeSelection(it)
+        }
+    }
+
+
+    private object SmartMovementMethod : ArrowKeyMovementMethod() {
+
+        override fun onTouchEvent(widget: TextView?, buffer: Spannable?, event: MotionEvent?): Boolean {
+            if (event != null && widget != null && buffer != null) {
+                if (handleMotion(event, widget, buffer)) {
+                    return true
+                }
+            }
+            return super.onTouchEvent(widget, buffer, event)
+        }
+
+        private fun handleMotion(event: MotionEvent, widget: TextView, buffer: Spannable): Boolean {
+            var handled = false
+
+            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_UP) {
+                val target = Point().apply {
+                    x = event.x.toInt() - widget.totalPaddingLeft + widget.scrollX
+                    y = event.y.toInt() - widget.totalPaddingTop + widget.scrollY
+                }
+
+                val line = widget.layout.getLineForVertical(target.y)
+                val offset = widget.layout.getOffsetForHorizontal(line, target.x.toFloat())
+
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    handled = handled || buffer.execute<ClickableSpan>(offset) {
+                        Selection.setSelection(buffer, buffer.getSpanStart(it), buffer.getSpanEnd(it))
+                    }
+                }
+
+                if (event.action == MotionEvent.ACTION_UP) {
+                    handled = handled || buffer.execute<ClickableSpan>(offset) {
+                        it.onClick(widget)
+                    }
+                }
+            }
+
+            return handled
+        }
+
+        private inline fun <reified T : Any> Spannable.execute(offset: Int, fn: (T) -> Unit): Boolean {
+            val spans = this.getSpans<T>(offset, offset)
+            if (spans.isNotEmpty()) {
+                spans.forEach(fn)
+                return true
+            }
+            return false
         }
     }
 
