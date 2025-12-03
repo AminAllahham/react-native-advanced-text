@@ -123,6 +123,15 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         }
     }
 
+
+    @ReactProp(name = "lineHeight")
+    fun setLineHeight(view: AdvancedTextView?, lineHeight: Float) {
+        android.util.Log.d(NAME, "setLineHeight called with: $lineHeight")
+        if (lineHeight > 0) {
+            view?.setAdvancedLineHeight(lineHeight)
+        }
+    }
+
     override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
         return mapOf(
             "onWordPress" to mapOf("registrationName" to "onWordPress"),

@@ -138,6 +138,13 @@ class AdvancedTextView : TextView {
         }
     }
 
+    fun setAdvancedLineHeight(multiplier: Float) {
+        if (lineHeightMultiplier == multiplier) return
+        lineHeightMultiplier = multiplier
+        updateTextWithHighlights()
+    }
+
+
     fun setAdvancedFontFamily(family: String) {
         if (fontFamily == family) return
         fontFamily = family
@@ -234,6 +241,11 @@ class AdvancedTextView : TextView {
             "italic" -> Typeface.create(fontFamily, Typeface.ITALIC)
             else -> Typeface.create(fontFamily, Typeface.NORMAL)
         }
+
+
+        lineSpacingMultiplier = lineHeightMultiplier
+        setLineSpacing(0f, lineHeightMultiplier)
+
 
         post {
             setText(spannableString, BufferType.SPANNABLE)
