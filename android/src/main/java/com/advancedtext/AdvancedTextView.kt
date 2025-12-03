@@ -41,6 +41,7 @@ class AdvancedTextView : TextView {
     private var fontWeight: String = "normal"
     private var textAlign: String = "left"
     private var fontFamily: String = "sans-serif"
+    private var lineHeightMultiplier: Float = 1.0f
 
     private var wordPositions: List<WordPosition> = emptyList()
 
@@ -243,7 +244,6 @@ class AdvancedTextView : TextView {
         }
 
 
-        lineSpacingMultiplier = lineHeightMultiplier
         setLineSpacing(0f, lineHeightMultiplier)
 
 
