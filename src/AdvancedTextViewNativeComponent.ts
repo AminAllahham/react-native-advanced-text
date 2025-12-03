@@ -2,7 +2,7 @@
 import type { ViewProps } from 'react-native';
 import { codegenNativeComponent } from 'react-native';
 // @ts-ignore
-import type { DirectEventHandler, Int32 } from 'react-native/Libraries/Types/CodegenTypes';
+import type { DirectEventHandler, Int32 , Float  } from 'react-native/Libraries/Types/CodegenTypes';
 
 interface HighlightedWord {
   index: Int32;
@@ -21,7 +21,7 @@ export interface NativeProps extends ViewProps {
   color?: string;
   textAlign?: string;
   fontFamily?: string;
-  lineHeight?: number;
+  lineHeight?: Float;
 }
 
 export default codegenNativeComponent<NativeProps>('AdvancedTextView');
