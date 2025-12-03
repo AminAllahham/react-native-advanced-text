@@ -23,6 +23,7 @@ using namespace facebook::react;
 @property (nonatomic, strong) UIColor *textColor;
 @property (nonatomic, strong) NSString *textAlign;
 @property (nonatomic, strong) NSString *fontFamily;
+@property (nonatomic, assign) CGFloat lineHeight;
 
 - (void)handleCustomMenuAction:(UIMenuItem *)sender;
 
@@ -89,6 +90,7 @@ using namespace facebook::react;
             _textColor = [UIColor labelColor];
             _textAlign = @"left";
             _fontFamily = @"System";
+            _lineHeight = 0.0;
 
             [self setupTextView];
             [self setupGestureRecognizers];
@@ -218,6 +220,12 @@ using namespace facebook::react;
 
         if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
             indicatorChanged = YES;
+        }
+
+        if (oldViewProps.lineHeight != newViewProps.lineHeight) {
+            NSLog(@"[AdvancedTextView] Updating lineHeight to: %f", newViewProps.lineHeight);
+            _lineHeight = static_cast<CGFloat>(newViewProps.lineHeight);
+            styleChanged = YES;
         }
 
         if (textChanged) {
@@ -356,7 +364,25 @@ using namespace facebook::react;
         NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc]
                                                         initWithString:_textView.text];
 
+        if (_lineHeight > 0) {
+            NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
 
+            UIFont *font = nil;
+            if (_fontFamily && _fontFamily.length > 0) {
+                font = [UIFont fontWithName:_fontFamily size:_fontSize > 0 ? _fontSize : 16.0];
+            }
+            if (!font) {
+                font = [UIFont systemFontOfSize:_fontSize > 0 ? _fontSize : 16.0];
+            }
+
+            CGFloat lineSpacing = (_lineHeight * font.lineHeight) - font.lineHeight;
+            paragraphStyle.lineSpacing = lineSpacing;
+
+            [attributedString addAttribute:NSParagraphStyleAttributeName
+                                     value:paragraphStyle
+                                     range:NSMakeRange(0, attributedString.length)];
+        }
+        
         UIFont *font = nil;
 
         if (_fontFamily && _fontFamily.length > 0) {
