@@ -277,9 +277,11 @@ using namespace facebook::react;
         NSCharacterSet *whitespaceSet = [NSCharacterSet whitespaceAndNewlineCharacterSet];
 
         NSInteger wordIndex = 0;
+        NSMutableArray *allMatches = [NSMutableArray array];
+
         while (searchRange.location < text.length) {
             while (searchRange.location < text.length &&
-                   [whitespaceSet characterIsMember:[text characterAtIndex:searchRange.location]]) {
+                [whitespaceSet characterIsMember:[text characterAtIndex:searchRange.location]]) {
                 searchRange.location++;
                 searchRange.length = text.length - searchRange.location;
             }
@@ -288,14 +290,14 @@ using namespace facebook::react;
 
             NSUInteger wordStart = searchRange.location;
             while (searchRange.location < text.length &&
-                   ![whitespaceSet characterIsMember:[text characterAtIndex:searchRange.location]]) {
+                ![whitespaceSet characterIsMember:[text characterAtIndex:searchRange.location]]) {
                 searchRange.location++;
             }
 
             NSRange wordRange = NSMakeRange(wordStart, searchRange.location - wordStart);
             NSString *word = [text substringWithRange:wordRange];
 
-            [_wordRanges addObject:@{
+            [allMatches addObject:@{
                 @"word": word,
                 @"range": [NSValue valueWithRange:wordRange],
                 @"index": @(wordIndex)
@@ -304,6 +306,25 @@ using namespace facebook::react;
             wordIndex++;
             searchRange.length = text.length - searchRange.location;
         }
+
+        for (NSInteger i = 0; i < allMatches.count; i++) {
+            NSMutableDictionary *wordInfo = [allMatches[i] mutableCopy];
+            NSRange wordRange = [wordInfo[@"range"] rangeValue];
+
+            NSUInteger extendedEnd;
+            if (i + 1 < allMatches.count) {
+                NSRange nextRange = [allMatches[i + 1][@"range"] rangeValue];
+                extendedEnd = nextRange.location;
+            } else {
+                extendedEnd = text.length;
+            }
+
+            NSRange extendedRange = NSMakeRange(wordRange.location, extendedEnd - wordRange.location);
+            wordInfo[@"extendedRange"] = [NSValue valueWithRange:extendedRange];
+
+            [_wordRanges addObject:[wordInfo copy]];
+        }
+
 
         NSLog(@"[AdvancedTextView] Parsed %ld words", (long)_wordRanges.count);
         [self updateTextAppearance];
@@ -382,7 +403,7 @@ using namespace facebook::react;
                                      value:paragraphStyle
                                      range:NSMakeRange(0, attributedString.length)];
         }
-        
+
         UIFont *font = nil;
 
         if (_fontFamily && _fontFamily.length > 0) {
@@ -421,16 +442,21 @@ using namespace facebook::react;
 
             UIColor *highlightColor = _highlightColors[index];
             if (highlightColor) {
-                [attributedString addAttribute:NSBackgroundColorAttributeName
-                                         value:highlightColor
-                                         range:range];
+                NSValue *extendedRangeValue = wordInfo[@"extendedRange"];
+                NSRange extendedRange = extendedRangeValue ? [extendedRangeValue rangeValue] : range;
+
+                if (extendedRange.location + extendedRange.length <= attributedString.length) {
+                    [attributedString addAttribute:NSBackgroundColorAttributeName
+                                            value:highlightColor
+                                            range:extendedRange];
+                }
             }
 
             if (_indicatorWordIndex >= 0 && [index integerValue] == _indicatorWordIndex) {
                 UIColor *indicatorColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.3];
                 [attributedString addAttribute:NSBackgroundColorAttributeName
-                                         value:indicatorColor
-                                         range:range];
+                                        value:indicatorColor
+                                        range:range];
             }
         }
 
