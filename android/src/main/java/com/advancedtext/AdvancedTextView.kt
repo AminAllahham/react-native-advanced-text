@@ -177,14 +177,20 @@ class AdvancedTextView : TextView {
 
         val positions = mutableListOf<WordPosition>()
         val regex = "\\S+".toRegex()
+        val matches = regex.findAll(text).toList()
 
-        regex.findAll(text).forEachIndexed { index, match ->
-            positions.add(WordPosition(
-                index = index,
-                start = match.range.first,
-                end = match.range.last + 1,
-                word = match.value
-            ))
+        matches.forEachIndexed { index, match ->
+            val wordEnd = match.range.last + 1
+            val extendedEnd = if (index + 1 < matches.size) matches[index + 1].range.first else text.length
+            positions.add(
+                WordPosition(
+                    index = index,
+                    start = match.range.first,
+                    end = wordEnd,
+                    extendedEnd = extendedEnd,
+                    word = match.value
+                )
+            )
         }
 
         wordPositions = positions
@@ -205,7 +211,7 @@ class AdvancedTextView : TextView {
                 spannableString.setSpan(
                     BackgroundColorSpan(color),
                     wordPos.start,
-                    wordPos.end,
+                    wordPos.extendedEnd,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
             }
@@ -219,7 +225,6 @@ class AdvancedTextView : TextView {
                 )
             }
 
-            // Add clickable span for word clicks
             spannableString.setSpan(
                 WordClickableSpan(wordPos.index, wordPos.word),
                 wordPos.start,
@@ -369,6 +374,7 @@ class AdvancedTextView : TextView {
         val index: Int,
         val start: Int,
         val end: Int,
+        val extendedEnd: Int,
         val word: String
     )
 }
