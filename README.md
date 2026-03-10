@@ -21,6 +21,7 @@ import { AdvancedText } from "react-native-advanced-text";
   style={[styles.AdvancedText, { minHeight }]}
   indicatorWordIndex={2}
   indicatorColor={'#FFD60A'}
+  indicatorBorderRadius={10}
   onWordPress={(event) => {
     console.log({event})
   }}

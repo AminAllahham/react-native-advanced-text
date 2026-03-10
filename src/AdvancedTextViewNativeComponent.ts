@@ -17,6 +17,7 @@ export interface NativeProps extends ViewProps {
   onSelection?: DirectEventHandler<{ selectedText: string; event: string }>;
   indicatorWordIndex?: Int32;
   indicatorColor?: string;
+  indicatorBorderRadius?: Float;
   fontSize?: Int32;
   fontWeight?: string;
   color?: string;

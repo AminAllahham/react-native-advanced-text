@@ -91,6 +91,14 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         }
     }
 
+    @ReactProp(name = "indicatorBorderRadius")
+    fun setIndicatorBorderRadius(view: AdvancedTextView?, radius: Float) {
+        android.util.Log.d(NAME, "setIndicatorBorderRadius called with: $radius")
+        if (radius >= 0) {
+            view?.setIndicatorBorderRadius(radius)
+        }
+    }
+
     @ReactProp(name = "color")
     fun setColor(view: AdvancedTextView?, color: String?) {
         android.util.Log.d(NAME, "setColor called with: $color")

@@ -1,8 +1,10 @@
 package com.advancedtext
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Point
+import android.graphics.RectF
 import android.text.SpannableString
 import android.text.Spannable
 import android.text.Spanned
@@ -10,7 +12,6 @@ import android.text.TextPaint
 import android.text.method.ArrowKeyMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.BackgroundColorSpan
-import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.util.Log
 import android.view.ActionMode
@@ -38,6 +39,7 @@ class AdvancedTextView : TextView {
     private var currentText: String = ""
     private var textColor: String = "#000000"
     private var indicatorColor: String = "#FF3B30"
+    private var indicatorBorderRadius: Float = 8f
     private var fontSize: Float = 16f
     private var fontWeight: String = "normal"
     private var textAlign: String = "left"
@@ -119,7 +121,13 @@ class AdvancedTextView : TextView {
 
     fun setIndicatorColor(colorInt: Int) {
         indicatorColor = String.format("#%06X", 0xFFFFFF and colorInt)
-        updateTextWithHighlights()
+        invalidate()
+    }
+
+    fun setIndicatorBorderRadius(radius: Float) {
+        if (indicatorBorderRadius == radius) return
+        indicatorBorderRadius = radius
+        invalidate()
     }
 
     fun setAdvancedTextSize(size: Float) {
@@ -222,24 +230,11 @@ class AdvancedTextView : TextView {
                 )
             }
 
-            if (wordPos.index == indicatorWordIndex) {
-                spannableString.setSpan(
-                    ForegroundColorSpan(parseColor(indicatorColor)),
-                    wordPos.start,
-                    wordPos.end,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            }
-
             spannableString.setSpan(
                 WordClickableSpan(
                     wordIndex = wordPos.index,
                     word = wordPos.word,
-                    wordColor = if (wordPos.index == indicatorWordIndex) {
-                        parseColor(indicatorColor)
-                    } else {
-                        parseColor(textColor)
-                    }
+                    wordColor = parseColor(textColor)
                 ),
                 wordPos.start,
                 wordPos.end,
@@ -270,6 +265,42 @@ class AdvancedTextView : TextView {
             setText(spannableString, BufferType.SPANNABLE)
             Log.d(TAG, "Text updated with ${wordPositions.size} spans")
         }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        drawIndicatorBackground(canvas)
+        super.onDraw(canvas)
+    }
+
+    private fun drawIndicatorBackground(canvas: Canvas) {
+        val currentLayout = layout ?: return
+        if (indicatorWordIndex < 0) return
+
+        val wordPos = wordPositions.find { it.index == indicatorWordIndex } ?: return
+        val start = wordPos.start
+        val end = wordPos.end
+
+        if (start >= end || end > currentText.length) return
+
+        val line = currentLayout.getLineForOffset(start)
+        val startX = currentLayout.getPrimaryHorizontal(start)
+        val endX = currentLayout.getPrimaryHorizontal(end)
+        val top = currentLayout.getLineTop(line).toFloat()
+        val bottom = currentLayout.getLineBottom(line).toFloat()
+        val density = resources.displayMetrics.density
+        val horizontalPadding = 6f * density
+        val verticalPadding = 2f * density
+        val rect = RectF(
+            totalPaddingLeft + startX - horizontalPadding,
+            totalPaddingTop + top + verticalPadding,
+            totalPaddingLeft + endX + horizontalPadding,
+            totalPaddingTop + bottom - verticalPadding
+        )
+
+        val originalColor = paint.color
+        paint.color = parseColor(indicatorColor)
+        canvas.drawRoundRect(rect, indicatorBorderRadius * density, indicatorBorderRadius * density, paint)
+        paint.color = originalColor
     }
 
     private fun parseColor(colorString: String): Int {

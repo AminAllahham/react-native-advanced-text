@@ -12,6 +12,7 @@ export const AdvancedText: React.FC<NativeProps> = ({
   onSelection,
   indicatorWordIndex,
   indicatorColor,
+  indicatorBorderRadius,
   ...restProps
 }) => {
   return (
@@ -25,6 +26,7 @@ export const AdvancedText: React.FC<NativeProps> = ({
       onSelection={onSelection}
       indicatorWordIndex={indicatorWordIndex}
       indicatorColor={indicatorColor}
+      indicatorBorderRadius={indicatorBorderRadius}
     />
   );
 };

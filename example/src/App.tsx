@@ -24,6 +24,7 @@ export default function App() {
         style={[styles.AdvancedText, { minHeight }]}
         indicatorWordIndex={2}
         indicatorColor="#FFD60A"
+        indicatorBorderRadius={10}
         onWordPress={onWordPress}
         menuOptions={['Highlight', 'Copy', 'Translate']}
         onSelection={onSelection}
