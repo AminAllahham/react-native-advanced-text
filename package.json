@@ -1,6 +1,6 @@
 {
   "name": "react-native-advanced-text",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": " Advanced text component for React Native with custom select options.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",

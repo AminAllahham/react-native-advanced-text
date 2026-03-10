@@ -2,7 +2,6 @@
 package com.advancedtext
 
 import android.graphics.Color
-import android.util.TypedValue
 import android.view.ViewGroup
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
@@ -50,7 +49,12 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
                     words.add(
                         HighlightedWord(
                             index = wordMap.getInt("index"),
-                            highlightColor = wordMap.getString("highlightColor") ?: "#FFFF00"
+                            highlightColor = wordMap.getString("highlightColor") ?: "#FFFF00",
+                            borderRadius = if (wordMap.hasKey("borderRadius")) {
+                                wordMap.getDouble("borderRadius").toFloat()
+                            } else {
+                                0f
+                            }
                         )
                     )
                 }
@@ -75,28 +79,6 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         }
         android.util.Log.d(NAME, "setMenuOptions: ${options.size} options")
         view?.setMenuOptions(options)
-    }
-
-    @ReactProp(name = "indicatorWordIndex")
-    fun setIndicatorWordIndex(view: AdvancedTextView?, index: Int) {
-        android.util.Log.d(NAME, "setIndicatorWordIndex: $index")
-        view?.setIndicatorWordIndex(if (index >= 0) index else -1)
-    }
-
-    @ReactProp(name = "indicatorColor")
-    fun setIndicatorColor(view: AdvancedTextView?, color: String?) {
-        android.util.Log.d(NAME, "setIndicatorColor called with: $color")
-        if (color != null) {
-            view?.setIndicatorColor(Color.parseColor(color))
-        }
-    }
-
-    @ReactProp(name = "indicatorBorderRadius")
-    fun setIndicatorBorderRadius(view: AdvancedTextView?, radius: Float) {
-        android.util.Log.d(NAME, "setIndicatorBorderRadius called with: $radius")
-        if (radius >= 0) {
-            view?.setIndicatorBorderRadius(radius)
-        }
     }
 
     @ReactProp(name = "color")

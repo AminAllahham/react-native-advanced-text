@@ -19,9 +19,6 @@ import { AdvancedText } from "react-native-advanced-text";
 <AdvancedText
   text={'This is an example of AdvancedText component. Tap on any word to see the event in action.'}
   style={[styles.AdvancedText, { minHeight }]}
-  indicatorWordIndex={2}
-  indicatorColor={'#FFD60A'}
-  indicatorBorderRadius={10}
   onWordPress={(event) => {
     console.log({event})
   }}
@@ -31,8 +28,14 @@ import { AdvancedText } from "react-native-advanced-text";
   }}
   highlightedWords={[
     {
+      index: 2,
+      highlightColor: '#FFD60A',
+      borderRadius: 10,
+    },
+    {
       index: 4,
       highlightColor: '#6baeffb5',
+      borderRadius: 6,
     },
   ]}
   fontSize={24}

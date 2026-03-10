@@ -15,21 +15,17 @@ using namespace facebook::react;
 @interface AdvancedTextView () <RCTAdvancedTextViewViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
 
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *wordRanges;
-@property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIColor *> *highlightColors;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSDictionary *> *highlightStyles;
 @property (nonatomic, strong) NSArray<NSString *> *menuOptions;
-@property (nonatomic, assign) NSInteger indicatorWordIndex;
 @property (nonatomic, assign) CGFloat fontSize;
 @property (nonatomic, strong) NSString *fontWeight;
 @property (nonatomic, strong) UIColor *textColor;
-@property (nonatomic, strong) UIColor *indicatorColor;
-@property (nonatomic, assign) CGFloat indicatorBorderRadius;
 @property (nonatomic, strong) NSString *textAlign;
 @property (nonatomic, strong) NSString *fontFamily;
 @property (nonatomic, assign) CGFloat lineHeight;
 
 - (void)handleCustomMenuAction:(UIMenuItem *)sender;
-- (nullable NSDictionary *)currentIndicatorWordInfo;
-- (void)drawIndicatorBackgroundInTextView:(UITextView *)textView rect:(CGRect)rect;
+- (void)drawHighlightedBackgroundsInTextView:(UITextView *)textView;
 
 @end
 
@@ -62,7 +58,7 @@ using namespace facebook::react;
 
 - (void)drawRect:(CGRect)rect
 {
-    [self.parentView drawIndicatorBackgroundInTextView:self rect:rect];
+    [self.parentView drawHighlightedBackgroundsInTextView:self];
     [super drawRect:rect];
 }
 
@@ -93,13 +89,10 @@ using namespace facebook::react;
             _props = defaultProps;
 
             _wordRanges = [NSMutableArray array];
-            _highlightColors = [NSMutableDictionary dictionary];
-            _indicatorWordIndex = -1;
+            _highlightStyles = [NSMutableDictionary dictionary];
             _fontSize = 16.0;
             _fontWeight = @"normal";
             _textColor = [UIColor labelColor];
-            _indicatorColor = [UIColor systemRedColor];
-            _indicatorBorderRadius = 8.0;
             _textAlign = @"left";
             _fontFamily = @"System";
             _lineHeight = 0.0;
@@ -167,7 +160,6 @@ using namespace facebook::react;
         BOOL textChanged = NO;
         BOOL highlightsChanged = NO;
         BOOL menuChanged = NO;
-        BOOL indicatorChanged = NO;
         BOOL styleChanged = NO;
 
         if (oldViewProps.fontSize != newViewProps.fontSize && newViewProps.fontSize) {
@@ -201,21 +193,6 @@ using namespace facebook::react;
             styleChanged = YES;
         }
 
-        if (oldViewProps.indicatorColor != newViewProps.indicatorColor &&
-            !newViewProps.indicatorColor.empty()) {
-            NSLog(@"[AdvancedTextView] Updating indicatorColor to: %s", newViewProps.indicatorColor.c_str());
-            NSString *indicatorColorStr =
-                [NSString stringWithUTF8String:newViewProps.indicatorColor.c_str()];
-            _indicatorColor = [self hexStringToColor:indicatorColorStr] ?: [UIColor systemRedColor];
-            styleChanged = YES;
-        }
-
-        if (oldViewProps.indicatorBorderRadius != newViewProps.indicatorBorderRadius) {
-            NSLog(@"[AdvancedTextView] Updating indicatorBorderRadius to: %f", newViewProps.indicatorBorderRadius);
-            _indicatorBorderRadius = static_cast<CGFloat>(newViewProps.indicatorBorderRadius);
-            styleChanged = YES;
-        }
-
         if (oldViewProps.text != newViewProps.text) {
             textChanged = YES;
             NSLog(@"[AdvancedTextView] Text changed");
@@ -227,7 +204,9 @@ using namespace facebook::react;
             for (size_t i = 0; i < oldViewProps.highlightedWords.size(); i++) {
                 const auto &oldHW = oldViewProps.highlightedWords[i];
                 const auto &newHW = newViewProps.highlightedWords[i];
-                if (oldHW.index != newHW.index || oldHW.highlightColor != newHW.highlightColor) {
+                if (oldHW.index != newHW.index ||
+                    oldHW.highlightColor != newHW.highlightColor ||
+                    oldHW.borderRadius != newHW.borderRadius) {
                     highlightsChanged = YES;
                     break;
                 }
@@ -243,10 +222,6 @@ using namespace facebook::react;
                     break;
                 }
             }
-        }
-
-        if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
-            indicatorChanged = YES;
         }
 
         if (oldViewProps.lineHeight != newViewProps.lineHeight) {
@@ -266,11 +241,6 @@ using namespace facebook::react;
 
         if (menuChanged) {
             [self updateMenuOptions:newViewProps.menuOptions];
-        }
-
-        if (indicatorChanged) {
-            _indicatorWordIndex = newViewProps.indicatorWordIndex;
-            [self updateTextAppearance];
         }
 
         if (styleChanged) {
@@ -366,15 +336,19 @@ using namespace facebook::react;
     NSLog(@"[AdvancedTextView] updateHighlightedWords called with %zu highlights",
           highlightedWords.size());
     @try {
-        [_highlightColors removeAllObjects];
+        [_highlightStyles removeAllObjects];
 
         for (const auto &hw : highlightedWords) {
             NSInteger index = hw.index;
             NSString *colorString = [NSString stringWithUTF8String:hw.highlightColor.c_str()];
             UIColor *color = [self hexStringToColor:colorString];
+            CGFloat borderRadius = static_cast<CGFloat>(hw.borderRadius);
 
             if (color) {
-                _highlightColors[@(index)] = color;
+                _highlightStyles[@(index)] = @{
+                    @"color": color,
+                    @"borderRadius": @(MAX(borderRadius, 0.0))
+                };
             }
         }
 
@@ -457,33 +431,6 @@ using namespace facebook::react;
                                  value:color
                                  range:NSMakeRange(0, attributedString.length)];
 
-
-        for (NSDictionary *wordInfo in _wordRanges) {
-            NSNumber *index = wordInfo[@"index"];
-            NSValue *rangeValue = wordInfo[@"range"];
-            NSRange range = [rangeValue rangeValue];
-
-            if (range.location + range.length > attributedString.length) {
-                continue;
-            }
-
-            UIColor *highlightColor = _highlightColors[index];
-            if (highlightColor) {
-                NSValue *extendedRangeValue = wordInfo[@"extendedRange"];
-                NSRange extendedRange = extendedRangeValue ? [extendedRangeValue rangeValue] : range;
-
-                if (extendedRange.location + extendedRange.length <= attributedString.length) {
-                    [attributedString addAttribute:NSBackgroundColorAttributeName
-                                            value:highlightColor
-                                            range:extendedRange];
-                }
-            }
-
-            if (_indicatorWordIndex >= 0 && [index integerValue] == _indicatorWordIndex) {
-                continue;
-            }
-        }
-
         _textView.attributedText = attributedString;
         [_textView setNeedsDisplay];
 
@@ -504,45 +451,46 @@ using namespace facebook::react;
     }
 }
 
-- (nullable NSDictionary *)currentIndicatorWordInfo
+- (void)drawHighlightedBackgroundsInTextView:(UITextView *)textView
 {
-    if (_indicatorWordIndex < 0 || _indicatorWordIndex >= _wordRanges.count) {
-        return nil;
-    }
-
-    return _wordRanges[_indicatorWordIndex];
-}
-
-- (void)drawIndicatorBackgroundInTextView:(UITextView *)textView rect:(CGRect)rect
-{
-    NSDictionary *wordInfo = [self currentIndicatorWordInfo];
-    if (!wordInfo || !textView.layoutManager || !textView.textContainer) {
-        return;
-    }
-
-    NSRange characterRange = [wordInfo[@"range"] rangeValue];
-    if (characterRange.location == NSNotFound || characterRange.length == 0) {
+    if (!textView.layoutManager || !textView.textContainer) {
         return;
     }
 
     NSLayoutManager *layoutManager = textView.layoutManager;
     NSTextContainer *textContainer = textView.textContainer;
-    NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:characterRange actualCharacterRange:nil];
-    UIColor *indicatorColor = _indicatorColor ?: [UIColor systemRedColor];
-    CGFloat radius = MAX(_indicatorBorderRadius, 0.0);
 
-    [indicatorColor setFill];
-    [layoutManager enumerateEnclosingRectsForGlyphRange:glyphRange
-                               withinSelectedGlyphRange:NSMakeRange(NSNotFound, 0)
-                                        inTextContainer:textContainer
-                                             usingBlock:^(CGRect enclosingRect, BOOL *stop) {
-        CGRect adjustedRect = CGRectInset(enclosingRect, -6.0, -2.0);
-        adjustedRect.origin.x += textView.textContainerInset.left;
-        adjustedRect.origin.y += textView.textContainerInset.top;
+    for (NSDictionary *wordInfo in _wordRanges) {
+        NSNumber *index = wordInfo[@"index"];
+        NSDictionary *highlightStyle = _highlightStyles[index];
+        if (!highlightStyle) {
+            continue;
+        }
 
-        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:adjustedRect cornerRadius:radius];
-        [path fill];
-    }];
+        NSValue *extendedRangeValue = wordInfo[@"extendedRange"];
+        NSRange characterRange = extendedRangeValue ? [extendedRangeValue rangeValue] : [wordInfo[@"range"] rangeValue];
+        if (characterRange.location == NSNotFound || characterRange.length == 0) {
+            continue;
+        }
+
+        UIColor *highlightColor = highlightStyle[@"color"];
+        CGFloat radius = [highlightStyle[@"borderRadius"] doubleValue];
+        NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:characterRange actualCharacterRange:nil];
+
+        [highlightColor setFill];
+        [layoutManager enumerateEnclosingRectsForGlyphRange:glyphRange
+                                   withinSelectedGlyphRange:NSMakeRange(NSNotFound, 0)
+                                            inTextContainer:textContainer
+                                                 usingBlock:^(CGRect enclosingRect, BOOL *stop) {
+            CGRect adjustedRect = CGRectInset(enclosingRect, -6.0, -2.0);
+            adjustedRect.origin.x += textView.textContainerInset.left;
+            adjustedRect.origin.y += textView.textContainerInset.top;
+
+            UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:adjustedRect
+                                                            cornerRadius:MAX(radius, 0.0)];
+            [path fill];
+        }];
+    }
 }
 
 

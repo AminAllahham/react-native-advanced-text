@@ -22,16 +22,19 @@ export default function App() {
           'This is an example of AdvancedText component. Tap on any word to see the event in action.'
         }
         style={[styles.AdvancedText, { minHeight }]}
-        indicatorWordIndex={2}
-        indicatorColor="#FFD60A"
-        indicatorBorderRadius={10}
         onWordPress={onWordPress}
         menuOptions={['Highlight', 'Copy', 'Translate']}
         onSelection={onSelection}
         highlightedWords={[
           {
+            index: 2,
+            highlightColor: '#FFD60A',
+            borderRadius: 10,
+          },
+          {
             index: 4,
             highlightColor: '#6baeffb5',
+            borderRadius: 6,
           },
         ]}
         fontSize={24}

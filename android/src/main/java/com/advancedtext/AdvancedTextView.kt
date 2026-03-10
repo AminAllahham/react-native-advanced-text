@@ -11,7 +11,6 @@ import android.text.Spanned
 import android.text.TextPaint
 import android.text.method.ArrowKeyMovementMethod
 import android.text.style.ClickableSpan
-import android.text.style.BackgroundColorSpan
 import android.util.AttributeSet
 import android.util.Log
 import android.view.ActionMode
@@ -33,13 +32,10 @@ class AdvancedTextView : TextView {
 
     private var highlightedWords: List<HighlightedWord> = emptyList()
     private var menuOptions: List<String> = emptyList()
-    private var indicatorWordIndex: Int = -1
     private var lastSelectedText: String = ""
     private var customActionMode: ActionMode? = null
     private var currentText: String = ""
     private var textColor: String = "#000000"
-    private var indicatorColor: String = "#FF3B30"
-    private var indicatorBorderRadius: Float = 8f
     private var fontSize: Float = 16f
     private var fontWeight: String = "normal"
     private var textAlign: String = "left"
@@ -119,17 +115,6 @@ class AdvancedTextView : TextView {
           updateTextWithHighlights()
     }
 
-    fun setIndicatorColor(colorInt: Int) {
-        indicatorColor = String.format("#%06X", 0xFFFFFF and colorInt)
-        invalidate()
-    }
-
-    fun setIndicatorBorderRadius(radius: Float) {
-        if (indicatorBorderRadius == radius) return
-        indicatorBorderRadius = radius
-        invalidate()
-    }
-
     fun setAdvancedTextSize(size: Float) {
         if (fontSize == size) return
         fontSize = size
@@ -177,12 +162,6 @@ class AdvancedTextView : TextView {
         updateTextWithHighlights()
     }
 
-    fun setIndicatorWordIndex(index: Int) {
-        if (this.indicatorWordIndex == index) return
-        this.indicatorWordIndex = index
-        updateTextWithHighlights()
-    }
-
     private fun calculateWordPositions(text: String) {
         if (text.isEmpty()) {
             wordPositions = emptyList()
@@ -220,16 +199,6 @@ class AdvancedTextView : TextView {
         val spannableString = SpannableString(currentText)
 
         wordPositions.forEach { wordPos ->
-            highlightedWords.find { it.index == wordPos.index }?.let { highlightedWord ->
-                val color = parseColor(highlightedWord.highlightColor)
-                spannableString.setSpan(
-                    BackgroundColorSpan(color),
-                    wordPos.start,
-                    wordPos.extendedEnd,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            }
-
             spannableString.setSpan(
                 WordClickableSpan(
                     wordIndex = wordPos.index,
@@ -268,38 +237,50 @@ class AdvancedTextView : TextView {
     }
 
     override fun onDraw(canvas: Canvas) {
-        drawIndicatorBackground(canvas)
+        drawHighlightedWordBackgrounds(canvas)
         super.onDraw(canvas)
     }
 
-    private fun drawIndicatorBackground(canvas: Canvas) {
+    private fun drawHighlightedWordBackgrounds(canvas: Canvas) {
         val currentLayout = layout ?: return
-        if (indicatorWordIndex < 0) return
-
-        val wordPos = wordPositions.find { it.index == indicatorWordIndex } ?: return
-        val start = wordPos.start
-        val end = wordPos.end
-
-        if (start >= end || end > currentText.length) return
-
-        val line = currentLayout.getLineForOffset(start)
-        val startX = currentLayout.getPrimaryHorizontal(start)
-        val endX = currentLayout.getPrimaryHorizontal(end)
-        val top = currentLayout.getLineTop(line).toFloat()
-        val bottom = currentLayout.getLineBottom(line).toFloat()
         val density = resources.displayMetrics.density
         val horizontalPadding = 6f * density
         val verticalPadding = 2f * density
-        val rect = RectF(
-            totalPaddingLeft + startX - horizontalPadding,
-            totalPaddingTop + top + verticalPadding,
-            totalPaddingLeft + endX + horizontalPadding,
-            totalPaddingTop + bottom - verticalPadding
-        )
-
         val originalColor = paint.color
-        paint.color = parseColor(indicatorColor)
-        canvas.drawRoundRect(rect, indicatorBorderRadius * density, indicatorBorderRadius * density, paint)
+
+        highlightedWords.forEach { highlightedWord ->
+            val wordPos = wordPositions.find { it.index == highlightedWord.index } ?: return@forEach
+            val start = wordPos.start
+            val end = wordPos.extendedEnd.coerceAtMost(currentText.length)
+
+            if (start >= end) return@forEach
+
+            val startLine = currentLayout.getLineForOffset(start)
+            val safeEndOffset = (end - 1).coerceAtLeast(start)
+            val endLine = currentLayout.getLineForOffset(safeEndOffset)
+
+            paint.color = parseColor(highlightedWord.highlightColor)
+
+            for (line in startLine..endLine) {
+                val lineStartOffset = maxOf(start, currentLayout.getLineStart(line))
+                val lineEndOffset = minOf(end, currentLayout.getLineEnd(line))
+                if (lineStartOffset >= lineEndOffset) continue
+
+                val left = currentLayout.getPrimaryHorizontal(lineStartOffset)
+                val right = currentLayout.getPrimaryHorizontal(lineEndOffset)
+                val top = currentLayout.getLineTop(line).toFloat()
+                val bottom = currentLayout.getLineBottom(line).toFloat()
+                val rect = RectF(
+                    totalPaddingLeft + left - horizontalPadding,
+                    totalPaddingTop + top + verticalPadding,
+                    totalPaddingLeft + right + horizontalPadding,
+                    totalPaddingTop + bottom - verticalPadding
+                )
+                val radius = highlightedWord.borderRadius * density
+                canvas.drawRoundRect(rect, radius, radius, paint)
+            }
+        }
+
         paint.color = originalColor
     }
 
@@ -427,5 +408,6 @@ class AdvancedTextView : TextView {
 
 data class HighlightedWord(
     val index: Int,
-    val highlightColor: String
+    val highlightColor: String,
+    val borderRadius: Float = 0f
 )
