@@ -21,6 +21,7 @@ using namespace facebook::react;
 @property (nonatomic, assign) CGFloat fontSize;
 @property (nonatomic, strong) NSString *fontWeight;
 @property (nonatomic, strong) UIColor *textColor;
+@property (nonatomic, strong) UIColor *indicatorColor;
 @property (nonatomic, strong) NSString *textAlign;
 @property (nonatomic, strong) NSString *fontFamily;
 @property (nonatomic, assign) CGFloat lineHeight;
@@ -88,6 +89,7 @@ using namespace facebook::react;
             _fontSize = 16.0;
             _fontWeight = @"normal";
             _textColor = [UIColor labelColor];
+            _indicatorColor = [UIColor systemRedColor];
             _textAlign = @"left";
             _fontFamily = @"System";
             _lineHeight = 0.0;
@@ -186,6 +188,15 @@ using namespace facebook::react;
             NSLog(@"[AdvancedTextView] Updating color to: %s", newViewProps.color.c_str());
             NSString *colorStr = [NSString stringWithUTF8String:newViewProps.color.c_str()];
             _textColor = [self hexStringToColor:colorStr];
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.indicatorColor != newViewProps.indicatorColor &&
+            !newViewProps.indicatorColor.empty()) {
+            NSLog(@"[AdvancedTextView] Updating indicatorColor to: %s", newViewProps.indicatorColor.c_str());
+            NSString *indicatorColorStr =
+                [NSString stringWithUTF8String:newViewProps.indicatorColor.c_str()];
+            _indicatorColor = [self hexStringToColor:indicatorColorStr] ?: [UIColor systemRedColor];
             styleChanged = YES;
         }
 
@@ -453,8 +464,8 @@ using namespace facebook::react;
             }
 
             if (_indicatorWordIndex >= 0 && [index integerValue] == _indicatorWordIndex) {
-                UIColor *indicatorColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.3];
-                [attributedString addAttribute:NSBackgroundColorAttributeName
+                UIColor *indicatorColor = _indicatorColor ?: [UIColor systemRedColor];
+                [attributedString addAttribute:NSForegroundColorAttributeName
                                         value:indicatorColor
                                         range:range];
             }

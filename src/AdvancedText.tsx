@@ -11,6 +11,7 @@ export const AdvancedText: React.FC<NativeProps> = ({
   onWordPress,
   onSelection,
   indicatorWordIndex,
+  indicatorColor,
   ...restProps
 }) => {
   return (
@@ -23,6 +24,7 @@ export const AdvancedText: React.FC<NativeProps> = ({
       onWordPress={onWordPress}
       onSelection={onSelection}
       indicatorWordIndex={indicatorWordIndex}
+      indicatorColor={indicatorColor}
     />
   );
 };

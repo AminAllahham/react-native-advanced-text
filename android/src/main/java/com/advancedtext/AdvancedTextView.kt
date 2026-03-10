@@ -37,6 +37,7 @@ class AdvancedTextView : TextView {
     private var customActionMode: ActionMode? = null
     private var currentText: String = ""
     private var textColor: String = "#000000"
+    private var indicatorColor: String = "#FF3B30"
     private var fontSize: Float = 16f
     private var fontWeight: String = "normal"
     private var textAlign: String = "left"
@@ -114,6 +115,11 @@ class AdvancedTextView : TextView {
     fun setAdvancedTextColor(colorInt: Int) {
           textColor = String.format("#%06X", 0xFFFFFF and colorInt)
           updateTextWithHighlights()
+    }
+
+    fun setIndicatorColor(colorInt: Int) {
+        indicatorColor = String.format("#%06X", 0xFFFFFF and colorInt)
+        updateTextWithHighlights()
     }
 
     fun setAdvancedTextSize(size: Float) {
@@ -218,7 +224,7 @@ class AdvancedTextView : TextView {
 
             if (wordPos.index == indicatorWordIndex) {
                 spannableString.setSpan(
-                    ForegroundColorSpan(Color.parseColor(textColor)),
+                    ForegroundColorSpan(parseColor(indicatorColor)),
                     wordPos.start,
                     wordPos.end,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -226,7 +232,15 @@ class AdvancedTextView : TextView {
             }
 
             spannableString.setSpan(
-                WordClickableSpan(wordPos.index, wordPos.word),
+                WordClickableSpan(
+                    wordIndex = wordPos.index,
+                    word = wordPos.word,
+                    wordColor = if (wordPos.index == indicatorWordIndex) {
+                        parseColor(indicatorColor)
+                    } else {
+                        parseColor(textColor)
+                    }
+                ),
                 wordPos.start,
                 wordPos.end,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -284,7 +298,8 @@ class AdvancedTextView : TextView {
 
     private inner class WordClickableSpan(
         private val wordIndex: Int,
-        private val word: String
+        private val word: String,
+        private val wordColor: Int
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
@@ -295,7 +310,7 @@ class AdvancedTextView : TextView {
         override fun updateDrawState(ds: TextPaint) {
             super.updateDrawState(ds)
             ds.isUnderlineText = false
-            ds.color = Color.parseColor(textColor)
+            ds.color = wordColor
         }
     }
 

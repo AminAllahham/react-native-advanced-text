@@ -83,6 +83,14 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         view?.setIndicatorWordIndex(if (index >= 0) index else -1)
     }
 
+    @ReactProp(name = "indicatorColor")
+    fun setIndicatorColor(view: AdvancedTextView?, color: String?) {
+        android.util.Log.d(NAME, "setIndicatorColor called with: $color")
+        if (color != null) {
+            view?.setIndicatorColor(Color.parseColor(color))
+        }
+    }
+
     @ReactProp(name = "color")
     fun setColor(view: AdvancedTextView?, color: String?) {
         android.util.Log.d(NAME, "setColor called with: $color")

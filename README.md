@@ -14,12 +14,13 @@ npm install react-native-advanced-text
 
 
 ```js
-import { AdvancedTextView } from "react-native-advanced-text";
+import { AdvancedText } from "react-native-advanced-text";
 
 <AdvancedText
   text={'This is an example of AdvancedText component. Tap on any word to see the event in action.'}
   style={[styles.AdvancedText, { minHeight }]}
   indicatorWordIndex={2}
+  indicatorColor={'#FFD60A'}
   onWordPress={(event) => {
     console.log({event})
   }}

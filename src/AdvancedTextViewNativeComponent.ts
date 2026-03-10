@@ -16,6 +16,7 @@ export interface NativeProps extends ViewProps {
   onWordPress?: DirectEventHandler<{ word: string; index: Int32 }>;
   onSelection?: DirectEventHandler<{ selectedText: string; event: string }>;
   indicatorWordIndex?: Int32;
+  indicatorColor?: string;
   fontSize?: Int32;
   fontWeight?: string;
   color?: string;
