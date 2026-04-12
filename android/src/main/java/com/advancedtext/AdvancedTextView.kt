@@ -259,8 +259,6 @@ class AdvancedTextView : TextView {
     private fun drawHighlightedWordBackgrounds(canvas: Canvas) {
         val currentLayout = layout ?: return
         val density = resources.displayMetrics.density
-        val horizontalPadding = 6f * density
-        val verticalPadding = 2f * density
         val originalColor = paint.color
 
         highlightedWords.forEach { highlightedWord ->
@@ -286,10 +284,10 @@ class AdvancedTextView : TextView {
                 val top = currentLayout.getLineTop(line).toFloat()
                 val bottom = currentLayout.getLineBottom(line).toFloat()
                 val rect = RectF(
-                    totalPaddingLeft + left - horizontalPadding,
-                    totalPaddingTop + top + verticalPadding,
-                    totalPaddingLeft + right + horizontalPadding,
-                    totalPaddingTop + bottom - verticalPadding
+                    totalPaddingLeft + left,
+                    totalPaddingTop + top,
+                    totalPaddingLeft + right,
+                    totalPaddingTop + bottom
                 )
                 val radius = highlightedWord.borderRadius * density
                 canvas.drawRoundRect(rect, radius, radius, paint)
