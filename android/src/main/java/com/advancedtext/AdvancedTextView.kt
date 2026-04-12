@@ -318,10 +318,10 @@ class AdvancedTextView : TextView {
                         val top = currentLayout.getLineTop(line).toFloat()
                         val bottom = currentLayout.getLineBottom(line).toFloat()
                         val rect = RectF(
-                            totalPaddingLeft + left - horizontalPadding,
-                            totalPaddingTop + top + verticalPadding,
-                            totalPaddingLeft + right + horizontalPadding,
-                            totalPaddingTop + bottom - verticalPadding
+                            totalPaddingLeft + left,
+                            totalPaddingTop + top,
+                            totalPaddingLeft + right,
+                            totalPaddingTop + bottom
                         )
                         canvas.drawRoundRect(rect, 0f, 0f, paint)
                     }
