@@ -42,6 +42,9 @@ class AdvancedTextView : TextView {
     private var fontFamily: String = "sans-serif"
     private var lineHeightMultiplier: Float = 1.0f
 
+    private var indicatorWordIndex: Int = -1
+    private var indicatorColor: String = ""
+
     private var wordPositions: List<WordPosition> = emptyList()
 
     constructor(context: Context?) : super(context) { init() }
@@ -154,6 +157,18 @@ class AdvancedTextView : TextView {
     fun setMenuOptions(menuOptions: List<String>) {
         if (this.menuOptions == menuOptions) return
         this.menuOptions = menuOptions
+    }
+
+    fun setIndicatorWordIndex(index: Int) {
+        if (indicatorWordIndex == index) return
+        indicatorWordIndex = index
+        invalidate()
+    }
+
+    fun setIndicatorColor(color: String) {
+        if (indicatorColor == color) return
+        indicatorColor = color
+        invalidate()
     }
 
     fun setHighlightedWords(highlightedWords: List<HighlightedWord>) {
@@ -278,6 +293,42 @@ class AdvancedTextView : TextView {
                 )
                 val radius = highlightedWord.borderRadius * density
                 canvas.drawRoundRect(rect, radius, radius, paint)
+            }
+        }
+
+        // Draw indicator for indicatorWordIndex
+        if (indicatorWordIndex >= 0 && indicatorColor.isNotEmpty()) {
+            val wordPos = wordPositions.find { it.index == indicatorWordIndex }
+            if (wordPos != null) {
+                val start = wordPos.start
+                val end = wordPos.extendedEnd.coerceAtMost(currentText.length)
+
+                if (start < end) {
+                    val startLine = currentLayout.getLineForOffset(start)
+                    val safeEndOffset = (end - 1).coerceAtLeast(start)
+                    val endLine = currentLayout.getLineForOffset(safeEndOffset)
+
+                    paint.color = parseColor(indicatorColor)
+
+                    for (line in startLine..endLine) {
+                        val lineStartOffset = maxOf(start, currentLayout.getLineStart(line))
+                        val lineEndOffset = minOf(end, currentLayout.getLineEnd(line))
+                        if (lineStartOffset >= lineEndOffset) continue
+
+                        val left = currentLayout.getPrimaryHorizontal(lineStartOffset)
+                        val right = currentLayout.getPrimaryHorizontal(lineEndOffset)
+                        val top = currentLayout.getLineTop(line).toFloat()
+                        val bottom = currentLayout.getLineBottom(line).toFloat()
+                        val rect = RectF(
+                            totalPaddingLeft + left - horizontalPadding,
+                            totalPaddingTop + top + verticalPadding,
+                            totalPaddingLeft + right + horizontalPadding,
+                            totalPaddingTop + bottom - verticalPadding
+                        )
+                        val radius = 4f * density
+                        canvas.drawRoundRect(rect, radius, radius, paint)
+                    }
+                }
             }
         }
 

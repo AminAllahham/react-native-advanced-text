@@ -23,6 +23,8 @@ using namespace facebook::react;
 @property (nonatomic, strong) NSString *textAlign;
 @property (nonatomic, strong) NSString *fontFamily;
 @property (nonatomic, assign) CGFloat lineHeight;
+@property (nonatomic, assign) NSInteger indicatorWordIndex;
+@property (nonatomic, strong) UIColor *indicatorColor;
 
 - (void)handleCustomMenuAction:(UIMenuItem *)sender;
 - (void)drawHighlightedBackgroundsInTextView:(UITextView *)textView;
@@ -96,6 +98,8 @@ using namespace facebook::react;
             _textAlign = @"left";
             _fontFamily = @"System";
             _lineHeight = 0.0;
+            _indicatorWordIndex = -1;
+            _indicatorColor = nil;
 
             [self setupTextView];
             [self setupGestureRecognizers];
@@ -228,6 +232,23 @@ using namespace facebook::react;
             NSLog(@"[AdvancedTextView] Updating lineHeight to: %f", newViewProps.lineHeight);
             _lineHeight = static_cast<CGFloat>(newViewProps.lineHeight);
             styleChanged = YES;
+        }
+
+        if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
+            NSLog(@"[AdvancedTextView] Updating indicatorWordIndex to: %d", newViewProps.indicatorWordIndex);
+            _indicatorWordIndex = static_cast<NSInteger>(newViewProps.indicatorWordIndex);
+            [_textView setNeedsDisplay];
+        }
+
+        if (oldViewProps.indicatorColor != newViewProps.indicatorColor) {
+            NSLog(@"[AdvancedTextView] Updating indicatorColor");
+            if (!newViewProps.indicatorColor.empty()) {
+                NSString *colorStr = [NSString stringWithUTF8String:newViewProps.indicatorColor.c_str()];
+                _indicatorColor = [self hexStringToColor:colorStr];
+            } else {
+                _indicatorColor = nil;
+            }
+            [_textView setNeedsDisplay];
         }
 
         if (textChanged) {
@@ -490,6 +511,39 @@ using namespace facebook::react;
                                                             cornerRadius:MAX(radius, 0.0)];
             [path fill];
         }];
+    }
+
+    // Draw indicator for indicatorWordIndex
+    if (_indicatorWordIndex >= 0 && _indicatorColor) {
+        for (NSDictionary *wordInfo in _wordRanges) {
+            NSNumber *index = wordInfo[@"index"];
+            if ([index integerValue] != _indicatorWordIndex) {
+                continue;
+            }
+
+            NSValue *extendedRangeValue = wordInfo[@"extendedRange"];
+            NSRange characterRange = extendedRangeValue ? [extendedRangeValue rangeValue] : [wordInfo[@"range"] rangeValue];
+            if (characterRange.location == NSNotFound || characterRange.length == 0) {
+                break;
+            }
+
+            NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:characterRange actualCharacterRange:nil];
+
+            [_indicatorColor setFill];
+            [layoutManager enumerateEnclosingRectsForGlyphRange:glyphRange
+                                       withinSelectedGlyphRange:NSMakeRange(NSNotFound, 0)
+                                                inTextContainer:textContainer
+                                                     usingBlock:^(CGRect enclosingRect, BOOL *stop) {
+                CGRect adjustedRect = CGRectInset(enclosingRect, -6.0, -2.0);
+                adjustedRect.origin.x += textView.textContainerInset.left;
+                adjustedRect.origin.y += textView.textContainerInset.top;
+
+                UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:adjustedRect
+                                                                cornerRadius:4.0];
+                [path fill];
+            }];
+            break;
+        }
     }
 }
 

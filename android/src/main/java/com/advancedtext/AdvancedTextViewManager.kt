@@ -122,6 +122,20 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
     }
 
 
+    @ReactProp(name = "indicatorWordIndex")
+    fun setIndicatorWordIndex(view: AdvancedTextView?, indicatorWordIndex: Int) {
+        android.util.Log.d(NAME, "setIndicatorWordIndex called with: $indicatorWordIndex")
+        view?.setIndicatorWordIndex(indicatorWordIndex)
+    }
+
+    @ReactProp(name = "indicatorColor")
+    fun setIndicatorColor(view: AdvancedTextView?, indicatorColor: String?) {
+        android.util.Log.d(NAME, "setIndicatorColor called with: $indicatorColor")
+        if (indicatorColor != null) {
+            view?.setIndicatorColor(indicatorColor)
+        }
+    }
+
     @ReactProp(name = "lineHeight")
     fun setLineHeight(view: AdvancedTextView?, lineHeight: Float) {
         android.util.Log.d(NAME, "setLineHeight called with: $lineHeight")
