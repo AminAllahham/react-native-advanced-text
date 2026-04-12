@@ -513,7 +513,6 @@ using namespace facebook::react;
         }];
     }
 
-    // Draw indicator for indicatorWordIndex
     if (_indicatorWordIndex >= 0 && _indicatorColor) {
         for (NSDictionary *wordInfo in _wordRanges) {
             NSNumber *index = wordInfo[@"index"];
@@ -534,7 +533,8 @@ using namespace facebook::react;
                                        withinSelectedGlyphRange:NSMakeRange(NSNotFound, 0)
                                                 inTextContainer:textContainer
                                                      usingBlock:^(CGRect enclosingRect, BOOL *stop) {
-                CGRect adjustedRect = CGRectInset(enclosingRect, -6.0, -2.0);
+                // Changed lines here to remove padding and align exactly to glyph rect
+                CGRect adjustedRect = enclosingRect;
                 adjustedRect.origin.x += textView.textContainerInset.left;
                 adjustedRect.origin.y += textView.textContainerInset.top;
 
