@@ -325,8 +325,7 @@ class AdvancedTextView : TextView {
                             totalPaddingLeft + right + horizontalPadding,
                             totalPaddingTop + bottom - verticalPadding
                         )
-                        val radius = 4f * density
-                        canvas.drawRoundRect(rect, radius, radius, paint)
+                        canvas.drawRoundRect(rect, 0f, 0f, paint)
                     }
                 }
             }

@@ -539,7 +539,7 @@ using namespace facebook::react;
                 adjustedRect.origin.y += textView.textContainerInset.top;
 
                 UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:adjustedRect
-                                                                cornerRadius:4.0];
+                                                                cornerRadius:0.0];
                 [path fill];
             }];
             break;
