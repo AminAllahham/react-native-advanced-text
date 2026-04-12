@@ -299,7 +299,7 @@ class AdvancedTextView : TextView {
             val wordPos = wordPositions.find { it.index == indicatorWordIndex }
             if (wordPos != null) {
                 val start = wordPos.start
-                val end = wordPos.extendedEnd.coerceAtMost(currentText.length)
+                val end = wordPos.end.coerceAtMost(currentText.length)
 
                 if (start < end) {
                     val startLine = currentLayout.getLineForOffset(start)
