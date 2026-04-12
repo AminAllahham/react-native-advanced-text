@@ -280,7 +280,12 @@ class AdvancedTextView : TextView {
                 if (lineStartOffset >= lineEndOffset) continue
 
                 val left = currentLayout.getPrimaryHorizontal(lineStartOffset)
-                val right = currentLayout.getPrimaryHorizontal(lineEndOffset)
+                val isLastWordOnLine = lineEndOffset >= currentLayout.getLineEnd(line)
+                val right = if (isLastWordOnLine) {
+                    currentLayout.getLineRight(line)
+                } else {
+                    currentLayout.getPrimaryHorizontal(lineEndOffset)
+                }
                 val top = currentLayout.getLineTop(line).toFloat()
                 val bottom = currentLayout.getLineBottom(line).toFloat()
                 val rect = RectF(
@@ -314,7 +319,12 @@ class AdvancedTextView : TextView {
                         if (lineStartOffset >= lineEndOffset) continue
 
                         val left = currentLayout.getPrimaryHorizontal(lineStartOffset)
-                        val right = currentLayout.getPrimaryHorizontal(lineEndOffset)
+                        val isLastWordOnLine = lineEndOffset >= currentLayout.getLineEnd(line)
+                        val right = if (isLastWordOnLine) {
+                            currentLayout.getLineRight(line)
+                        } else {
+                            currentLayout.getPrimaryHorizontal(lineEndOffset)
+                        }
                         val top = currentLayout.getLineTop(line).toFloat()
                         val bottom = currentLayout.getLineBottom(line).toFloat()
                         val rect = RectF(
