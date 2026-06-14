@@ -24,6 +24,7 @@ export interface NativeProps extends ViewProps {
   lineHeight?: Float;
   indicatorWordIndex?: Int32;
   indicatorColor?: string;
+  indicatorMode?: string;
 }
 
 export default codegenNativeComponent<NativeProps>('AdvancedTextView');

@@ -44,6 +44,7 @@ class AdvancedTextView : TextView {
 
     private var indicatorWordIndex: Int = -1
     private var indicatorColor: String = ""
+    private var indicatorMode: String = "Highlight"
 
     private var wordPositions: List<WordPosition> = emptyList()
 
@@ -162,12 +163,27 @@ class AdvancedTextView : TextView {
     fun setIndicatorWordIndex(index: Int) {
         if (indicatorWordIndex == index) return
         indicatorWordIndex = index
-        invalidate()
+        if (indicatorMode == "fill") {
+            updateTextWithHighlights()
+        } else {
+            invalidate()
+        }
     }
 
     fun setIndicatorColor(color: String) {
         if (indicatorColor == color) return
         indicatorColor = color
+        if (indicatorMode == "fill") {
+            updateTextWithHighlights()
+        } else {
+            invalidate()
+        }
+    }
+
+    fun setIndicatorMode(mode: String) {
+        if (indicatorMode == mode) return
+        indicatorMode = mode
+        updateTextWithHighlights()
         invalidate()
     }
 
@@ -214,11 +230,19 @@ class AdvancedTextView : TextView {
         val spannableString = SpannableString(currentText)
 
         wordPositions.forEach { wordPos ->
+            val wordColor = if (indicatorMode == "fill" &&
+                               indicatorWordIndex >= 0 &&
+                               wordPos.index <= indicatorWordIndex &&
+                               indicatorColor.isNotEmpty()) {
+                parseColor(indicatorColor)
+            } else {
+                parseColor(textColor)
+            }
             spannableString.setSpan(
                 WordClickableSpan(
                     wordIndex = wordPos.index,
                     word = wordPos.word,
-                    wordColor = parseColor(textColor)
+                    wordColor = wordColor
                 ),
                 wordPos.start,
                 wordPos.end,
@@ -299,8 +323,8 @@ class AdvancedTextView : TextView {
             }
         }
 
-        // Draw indicator for indicatorWordIndex
-        if (indicatorWordIndex >= 0 && indicatorColor.isNotEmpty()) {
+        // Draw indicator background only in Highlight mode
+        if (indicatorMode != "fill" && indicatorWordIndex >= 0 && indicatorColor.isNotEmpty()) {
             val wordPos = wordPositions.find { it.index == indicatorWordIndex }
             if (wordPos != null) {
                 val start = wordPos.start

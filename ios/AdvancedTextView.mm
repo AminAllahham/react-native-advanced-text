@@ -25,6 +25,7 @@ using namespace facebook::react;
 @property (nonatomic, assign) CGFloat lineHeight;
 @property (nonatomic, assign) NSInteger indicatorWordIndex;
 @property (nonatomic, strong) UIColor *indicatorColor;
+@property (nonatomic, strong) NSString *indicatorMode;
 
 - (void)handleCustomMenuAction:(UIMenuItem *)sender;
 - (void)drawHighlightedBackgroundsInTextView:(UITextView *)textView;
@@ -100,6 +101,7 @@ using namespace facebook::react;
             _lineHeight = 0.0;
             _indicatorWordIndex = -1;
             _indicatorColor = nil;
+            _indicatorMode = @"Highlight";
 
             [self setupTextView];
             [self setupGestureRecognizers];
@@ -234,10 +236,20 @@ using namespace facebook::react;
             styleChanged = YES;
         }
 
+        BOOL indicatorChanged = NO;
+
+        if (oldViewProps.indicatorMode != newViewProps.indicatorMode) {
+            NSLog(@"[AdvancedTextView] Updating indicatorMode to: %s", newViewProps.indicatorMode.c_str());
+            _indicatorMode = newViewProps.indicatorMode.empty()
+                ? @"Highlight"
+                : [NSString stringWithUTF8String:newViewProps.indicatorMode.c_str()];
+            indicatorChanged = YES;
+        }
+
         if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
             NSLog(@"[AdvancedTextView] Updating indicatorWordIndex to: %d", newViewProps.indicatorWordIndex);
             _indicatorWordIndex = static_cast<NSInteger>(newViewProps.indicatorWordIndex);
-            [_textView setNeedsDisplay];
+            indicatorChanged = YES;
         }
 
         if (oldViewProps.indicatorColor != newViewProps.indicatorColor) {
@@ -248,7 +260,15 @@ using namespace facebook::react;
             } else {
                 _indicatorColor = nil;
             }
-            [_textView setNeedsDisplay];
+            indicatorChanged = YES;
+        }
+
+        if (indicatorChanged) {
+            if ([_indicatorMode isEqualToString:@"fill"]) {
+                [self updateTextAppearance]; // rebuilds attributed text with fill colors; calls setNeedsDisplay
+            } else {
+                [_textView setNeedsDisplay];
+            }
         }
 
         if (textChanged) {
@@ -452,6 +472,18 @@ using namespace facebook::react;
                                  value:color
                                  range:NSMakeRange(0, attributedString.length)];
 
+        if ([_indicatorMode isEqualToString:@"fill"] && _indicatorWordIndex >= 0 && _indicatorColor) {
+            for (NSDictionary *wordInfo in _wordRanges) {
+                NSInteger idx = [wordInfo[@"index"] integerValue];
+                if (idx <= _indicatorWordIndex) {
+                    NSRange wordRange = [wordInfo[@"range"] rangeValue];
+                    [attributedString addAttribute:NSForegroundColorAttributeName
+                                             value:_indicatorColor
+                                             range:wordRange];
+                }
+            }
+        }
+
         _textView.attributedText = attributedString;
         [_textView setNeedsDisplay];
 
@@ -513,7 +545,7 @@ using namespace facebook::react;
         }];
     }
 
-    if (_indicatorWordIndex >= 0 && _indicatorColor) {
+    if (![_indicatorMode isEqualToString:@"fill"] && _indicatorWordIndex >= 0 && _indicatorColor) {
         for (NSDictionary *wordInfo in _wordRanges) {
             NSNumber *index = wordInfo[@"index"];
             if ([index integerValue] != _indicatorWordIndex) {

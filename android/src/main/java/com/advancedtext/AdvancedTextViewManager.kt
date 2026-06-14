@@ -136,6 +136,14 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         }
     }
 
+    @ReactProp(name = "indicatorMode")
+    fun setIndicatorMode(view: AdvancedTextView?, indicatorMode: String?) {
+        android.util.Log.d(NAME, "setIndicatorMode called with: $indicatorMode")
+        if (indicatorMode != null) {
+            view?.setIndicatorMode(indicatorMode)
+        }
+    }
+
     @ReactProp(name = "lineHeight")
     fun setLineHeight(view: AdvancedTextView?, lineHeight: Float) {
         android.util.Log.d(NAME, "setLineHeight called with: $lineHeight")
