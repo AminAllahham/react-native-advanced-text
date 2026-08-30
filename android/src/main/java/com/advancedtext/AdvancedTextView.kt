@@ -41,6 +41,8 @@ class AdvancedTextView : TextView {
     private var textAlign: String = "left"
     private var fontFamily: String = "sans-serif"
     private var lineHeightMultiplier: Float = 1.0f
+    // Value from JS, in dp/points (0 = unset). Converted to em for TextView.
+    private var letterSpacingDp: Float = 0f
 
     private var indicatorWordIndex: Int = -1
     private var indicatorColor: String = ""
@@ -56,7 +58,10 @@ class AdvancedTextView : TextView {
         Log.d(TAG, "AdvancedTextView initialized")
 
         textSize = 16f
-        setPadding(16, 16, 16, 16)
+        // Zero intrinsic padding so the rendered text matches the size reported
+        // by the Fabric ShadowNode's measureContent(). Consumers add padding via
+        // React Native `style` instead, exactly like <Text>.
+        setPadding(0, 0, 0, 0)
         setTextIsSelectable(true)
 
         movementMethod = SmartMovementMethod
@@ -145,6 +150,12 @@ class AdvancedTextView : TextView {
     fun setAdvancedLineHeight(multiplier: Float) {
         if (lineHeightMultiplier == multiplier) return
         lineHeightMultiplier = multiplier
+        updateTextWithHighlights()
+    }
+
+    fun setAdvancedLetterSpacing(spacingDp: Float) {
+        if (letterSpacingDp == spacingDp) return
+        letterSpacingDp = spacingDp
         updateTextWithHighlights()
     }
 
@@ -267,6 +278,14 @@ class AdvancedTextView : TextView {
 
 
         setLineSpacing(0f, lineHeightMultiplier)
+
+        // Android's letterSpacing is in em; the prop is in dp/points. The ratio
+        // dp / fontSize is scale-invariant, so no density conversion is needed.
+        letterSpacing = if (letterSpacingDp != 0f && fontSize > 0f) {
+            letterSpacingDp / fontSize
+        } else {
+            0f
+        }
 
 
         post {

@@ -23,6 +23,7 @@ using namespace facebook::react;
 @property (nonatomic, strong) NSString *textAlign;
 @property (nonatomic, strong) NSString *fontFamily;
 @property (nonatomic, assign) CGFloat lineHeight;
+@property (nonatomic, assign) CGFloat letterSpacing;
 @property (nonatomic, assign) NSInteger indicatorWordIndex;
 @property (nonatomic, strong) UIColor *indicatorColor;
 @property (nonatomic, strong) NSString *indicatorMode;
@@ -99,6 +100,7 @@ using namespace facebook::react;
             _textAlign = @"left";
             _fontFamily = @"System";
             _lineHeight = 0.0;
+            _letterSpacing = 0.0;
             _indicatorWordIndex = -1;
             _indicatorColor = nil;
             _indicatorMode = @"Highlight";
@@ -124,9 +126,17 @@ using namespace facebook::react;
         _textView.parentView = self;
         _textView.editable = NO;
         _textView.selectable = YES;
-        _textView.scrollEnabled = YES;
+        // The Fabric ShadowNode now measures the intrinsic content height, so the
+        // native view is always laid out tall enough to fit its text. Disable
+        // scrolling so the component behaves like <Text> (content grows / clips
+        // rather than scrolls).
+        _textView.scrollEnabled = NO;
         _textView.backgroundColor = [UIColor clearColor];
-        _textView.textContainerInset = UIEdgeInsetsMake(8, 8, 8, 8);
+        // Zero all intrinsic padding so the rendered text box matches the size
+        // reported by the ShadowNode's measureContent(). Consumers add padding
+        // via React Native `style` instead, exactly like <Text>.
+        _textView.textContainerInset = UIEdgeInsetsZero;
+        _textView.textContainer.lineFragmentPadding = 0;
         _textView.font = [UIFont systemFontOfSize:16];
         _textView.textColor = [UIColor labelColor];
         _textView.delegate = self;
@@ -233,6 +243,12 @@ using namespace facebook::react;
         if (oldViewProps.lineHeight != newViewProps.lineHeight) {
             NSLog(@"[AdvancedTextView] Updating lineHeight to: %f", newViewProps.lineHeight);
             _lineHeight = static_cast<CGFloat>(newViewProps.lineHeight);
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.letterSpacing != newViewProps.letterSpacing) {
+            NSLog(@"[AdvancedTextView] Updating letterSpacing to: %f", newViewProps.letterSpacing);
+            _letterSpacing = static_cast<CGFloat>(newViewProps.letterSpacing);
             styleChanged = YES;
         }
 
@@ -465,6 +481,12 @@ using namespace facebook::react;
         [attributedString addAttribute:NSFontAttributeName
                                  value:font
                                  range:NSMakeRange(0, attributedString.length)];
+
+        if (_letterSpacing != 0.0) {
+            [attributedString addAttribute:NSKernAttributeName
+                                     value:@(_letterSpacing)
+                                     range:NSMakeRange(0, attributedString.length)];
+        }
 
 
         UIColor *color = _textColor ?: [UIColor labelColor];

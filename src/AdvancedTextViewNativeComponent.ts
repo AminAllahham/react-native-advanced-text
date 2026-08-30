@@ -22,6 +22,7 @@ export interface NativeProps extends ViewProps {
   textAlign?: string;
   fontFamily?: string;
   lineHeight?: Float;
+  letterSpacing?: Float;
   indicatorWordIndex?: Int32;
   indicatorColor?: string;
   indicatorMode?: string;

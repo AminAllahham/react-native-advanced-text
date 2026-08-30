@@ -13,15 +13,15 @@ export default function App() {
     console.log('Event type:', e.nativeEvent.event);
   }, []);
 
-  const minHeight = 200;
-
   return (
     <View style={styles.container}>
+      {/* No `height` / `minHeight`: the Fabric ShadowNode measures the
+          intrinsic content height from the text and the available width. */}
       <AdvancedText
         text={
-          'This is an example of AdvancedText component. Tap on any word to see the event in action.'
+          'This is an example of AdvancedText component. Tap on any word to see the event in action. It wraps naturally and grows to fit its content, just like a normal <Text>.'
         }
-        style={[styles.AdvancedText, { minHeight }]}
+        style={styles.AdvancedText}
         onWordPress={onWordPress}
         menuOptions={['Highlight', 'Copy', 'Translate']}
         onSelection={onSelection}
@@ -41,6 +41,7 @@ export default function App() {
         color={'#FFFFFF'}
         fontWeight="normal"
         fontFamily={'monospace'}
+        letterSpacing={1}
       />
     </View>
   );

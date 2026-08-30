@@ -9,6 +9,7 @@
 npm install react-native-advanced-text
 ```
 
+> Requires the New Architecture (Fabric). React Native 0.80+ recommended.
 
 ## Usage
 
@@ -18,7 +19,7 @@ import { AdvancedText } from "react-native-advanced-text";
 
 <AdvancedText
   text={'This is an example of AdvancedText component. Tap on any word to see the event in action.'}
-  style={[styles.AdvancedText, { minHeight }]}
+  style={styles.AdvancedText}
   onWordPress={(event) => {
     console.log({event})
   }}
@@ -42,9 +43,39 @@ import { AdvancedText } from "react-native-advanced-text";
   color={'#FFFFFF'}
   fontWeight="normal"
   fontFamily={'monospace'}
+  letterSpacing={1}
 />
 ```
 
+## Sizing
+
+`AdvancedText` measures its own height, like React Native's built‑in `<Text>`.
+Give it a width (via `style`, `flex`, or a constraining parent) and it derives
+its height from the text content and that width — **no explicit `height` is
+required**.
+
+Under the hood the Fabric ShadowNode implements `measureContent()` using React
+Native's own `TextLayoutManager` (the same engine `<Text>` uses), so wrapping,
+font metrics, `letterSpacing` and `lineHeight` are accounted for on both iOS and
+Android without any JS‑side text measurement.
+
+```jsx
+// Before: an explicit height had to be estimated and passed in.
+<AdvancedText text={text} style={{ height: estimatedHeight }} />
+
+// Now:
+<AdvancedText text={text} style={{ width: '100%' }} />
+```
+
+### Props that affect measurement
+
+| Prop            | Notes                                                                 |
+| --------------- | ------------------------------------------------------------------- |
+| `fontSize`      | points (defaults to 16)                                            |
+| `fontFamily`    |                                                                   |
+| `fontWeight`    | `"bold"` or `"italic"`                                             |
+| `letterSpacing` | points; applied to both rendering and measurement                  |
+| `lineHeight`    | multiple of the font size (unchanged behavior)                     |
 
 ## Contributing
 

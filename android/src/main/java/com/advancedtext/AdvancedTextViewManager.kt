@@ -152,6 +152,12 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         }
     }
 
+    @ReactProp(name = "letterSpacing")
+    fun setLetterSpacing(view: AdvancedTextView?, letterSpacing: Float) {
+        android.util.Log.d(NAME, "setLetterSpacing called with: $letterSpacing")
+        view?.setAdvancedLetterSpacing(letterSpacing)
+    }
+
     override fun getExportedCustomDirectEventTypeConstants(): Map<String, Any> {
         return mapOf(
             "onWordPress" to mapOf("registrationName" to "onWordPress"),
