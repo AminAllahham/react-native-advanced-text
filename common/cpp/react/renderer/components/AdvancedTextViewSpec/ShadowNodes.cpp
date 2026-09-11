@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <limits>
 #include <string>
 
 #include <react/renderer/attributedstring/AttributedStringBox.h>
@@ -32,6 +33,10 @@ std::string toLowerAscii(std::string value) {
   return value;
 }
 
+// Fallback only: an approximate ratio of a single line's natural height to
+// its font size, used if a real measurement (Android) isn't available/valid.
+constexpr Float kLineHeightFudgeFactor = 1.2;
+
 } // namespace
 
 AdvancedTextViewShadowNode::AdvancedTextViewShadowNode(
@@ -42,7 +47,47 @@ AdvancedTextViewShadowNode::AdvancedTextViewShadowNode(
           static_cast<const AdvancedTextViewShadowNode&>(sourceShadowNode)
               .textLayoutManager_) {}
 
-AttributedString AdvancedTextViewShadowNode::getAttributedString() const {
+#if defined(ANDROID)
+Float AdvancedTextViewShadowNode::measureNaturalSingleLineHeight(
+    const LayoutContext& layoutContext,
+    const TextAttributes& baseTextAttributes) const {
+  // Same font/size/weight/style as the real fragment, but with `lineHeight`
+  // cleared so this reports the font's own, unscaled single-line height --
+  // exactly what Android's `setLineSpacing(0, multiplier)` multiplies.
+  auto probeAttributes = baseTextAttributes;
+  probeAttributes.lineHeight = std::numeric_limits<Float>::quiet_NaN();
+
+  auto probe = AttributedString{};
+  probe.appendFragment(AttributedString::Fragment{
+      .string = "M",
+      .textAttributes = probeAttributes,
+      .parentShadowView = ShadowView(*this),
+  });
+
+  auto paragraphAttributes = ParagraphAttributes{};
+
+  auto textLayoutContext = TextLayoutContext{};
+  textLayoutContext.pointScaleFactor = layoutContext.pointScaleFactor;
+  textLayoutContext.surfaceId = getSurfaceId();
+
+  // Unconstrained so a single glyph can never be forced to wrap.
+  auto unconstrainedLayoutConstraints = LayoutConstraints{
+      {0, 0},
+      {std::numeric_limits<Float>::infinity(),
+       std::numeric_limits<Float>::infinity()}};
+
+  auto measurement = textLayoutManager_->measure(
+      AttributedStringBox{probe},
+      paragraphAttributes,
+      textLayoutContext,
+      unconstrainedLayoutConstraints);
+
+  return measurement.size.height;
+}
+#endif
+
+AttributedString AdvancedTextViewShadowNode::getAttributedString(
+    const LayoutContext& layoutContext) const {
   const auto& props = getConcreteProps();
 
   auto textAttributes = TextAttributes::defaultTextAttributes();
@@ -68,13 +113,32 @@ AttributedString AdvancedTextViewShadowNode::getAttributedString() const {
     textAttributes.letterSpacing = props.letterSpacing;
   }
 
-  if (props.lineHeight > 0) {
-    // The component treats `lineHeight` as a multiple of the font size
-    // (see AdvancedTextView.mm / AdvancedTextView.kt). `TextAttributes`
-    // expects an absolute value; approximate the platform default single
-    // line height as 1.2 * fontSize.
+  // The component treats `lineHeight` as a multiple of the font's own
+  // natural line height (see setLineSpacing(0, multiplier) in
+  // AdvancedTextView.kt / the NSParagraphStyle-based spacing in
+  // AdvancedTextView.mm) -- NOT the absolute per-line value
+  // `TextAttributes.lineHeight` expects. A multiplier of 1 *is* the natural
+  // line height, so there is nothing to override in that case (and
+  // overriding it with an approximation, as this used to do unconditionally,
+  // made even the "no lineHeight override" case measure taller or shorter
+  // than the real render).
+  if (props.lineHeight > 0 && props.lineHeight != 1.0) {
+#if defined(ANDROID)
+    // Android's natural single-line height depends on the resolved
+    // font/size/weight and isn't a fixed ratio of fontSize, so a constant
+    // approximation drifts from AdvancedTextView.kt's real
+    // setLineSpacing()-based layout by an amount that compounds with every
+    // wrapped line -- which is why the error scaled with paragraph length.
+    // Measure the real natural height for these exact attributes instead.
+    auto naturalLineHeight =
+        measureNaturalSingleLineHeight(layoutContext, textAttributes);
+    textAttributes.lineHeight = naturalLineHeight > 0
+        ? props.lineHeight * naturalLineHeight
+        : props.lineHeight * textAttributes.fontSize * kLineHeightFudgeFactor;
+#else
     textAttributes.lineHeight =
-        props.lineHeight * textAttributes.fontSize * 1.2;
+        props.lineHeight * textAttributes.fontSize * kLineHeightFudgeFactor;
+#endif
   }
 
   auto attributedString = AttributedString{};
@@ -109,7 +173,7 @@ Size AdvancedTextViewShadowNode::measureContent(
   textLayoutContext.surfaceId = getSurfaceId();
 
   auto measurement = textLayoutManager_->measure(
-      AttributedStringBox{getAttributedString()},
+      AttributedStringBox{getAttributedString(layoutContext)},
       paragraphAttributes,
       textLayoutContext,
       layoutConstraints);
