@@ -25,6 +25,7 @@ import com.facebook.react.uimanager.events.RCTEventEmitter
 import android.text.Selection
 import android.graphics.Typeface
 import androidx.core.text.getSpans
+import com.facebook.react.common.assets.ReactFontManager
 
 class AdvancedTextView : TextView {
 
@@ -163,8 +164,24 @@ class AdvancedTextView : TextView {
     fun setAdvancedFontFamily(family: String) {
         if (fontFamily == family) return
         fontFamily = family
-        typeface = Typeface.create(family, Typeface.NORMAL)
+        typeface = resolveTypeface(family, Typeface.NORMAL)
     }
+
+    /**
+     * `Typeface.create(family, style)` only resolves OS-registered families; it
+     * silently substitutes a system font for anything bundled under
+     * `assets/fonts/` (the RN/Expo custom-font pipeline) instead of failing.
+     * The Fabric ShadowNode measures this component's text via
+     * `TextLayoutManager`, which resolves fonts through `ReactFontManager` -
+     * so a custom font here rendered with the substituted typeface has
+     * different glyph widths than what was measured, wrapping onto a
+     * different number of lines and producing extra height for some strings
+     * but not others. Going through `ReactFontManager` keeps the rendered
+     * typeface identical to the measured one (and is a no-op for system font
+     * names, which it falls back to `Typeface.create` for anyway).
+     */
+    private fun resolveTypeface(family: String, style: Int): Typeface =
+        ReactFontManager.getInstance().getTypeface(family, style, context.assets)
 
     fun setMenuOptions(menuOptions: List<String>) {
         if (this.menuOptions == menuOptions) return
@@ -271,9 +288,9 @@ class AdvancedTextView : TextView {
         setTextSize(fontSize)
 
         typeface = when (fontWeight) {
-            "bold" -> Typeface.create(fontFamily, Typeface.BOLD)
-            "italic" -> Typeface.create(fontFamily, Typeface.ITALIC)
-            else -> Typeface.create(fontFamily, Typeface.NORMAL)
+            "bold" -> resolveTypeface(fontFamily, Typeface.BOLD)
+            "italic" -> resolveTypeface(fontFamily, Typeface.ITALIC)
+            else -> resolveTypeface(fontFamily, Typeface.NORMAL)
         }
 
 
