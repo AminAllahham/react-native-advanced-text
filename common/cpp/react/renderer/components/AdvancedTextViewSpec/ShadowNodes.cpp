@@ -52,8 +52,7 @@ Float AdvancedTextViewShadowNode::measureNaturalSingleLineHeight(
     const LayoutContext& layoutContext,
     const TextAttributes& baseTextAttributes) const {
   // Same font/size/weight/style as the real fragment, but with `lineHeight`
-  // cleared so this reports the font's own, unscaled single-line height --
-  // exactly what Android's `setLineSpacing(0, multiplier)` multiplies.
+  // cleared so this reports the font's own, unscaled single-line height.
   auto probeAttributes = baseTextAttributes;
   probeAttributes.lineHeight = std::numeric_limits<Float>::quiet_NaN();
 
@@ -65,6 +64,14 @@ Float AdvancedTextViewShadowNode::measureNaturalSingleLineHeight(
   });
 
   auto paragraphAttributes = ParagraphAttributes{};
+  // Measure the tight ascent+descent box (no extra top/bottom accent
+  // padding). This is the same "natural line height" basis
+  // CssLineHeightSpan.kt derives from `Paint.getFontMetricsInt()` on the
+  // view side (which is unaffected by `includeFontPadding`, a Layout-level
+  // setting) -- measuring with padding included here would double count it
+  // once per rendered line once the resulting value is multiplied and
+  // applied to the whole paragraph.
+  paragraphAttributes.includeFontPadding = false;
 
   auto textLayoutContext = TextLayoutContext{};
   textLayoutContext.pointScaleFactor = layoutContext.pointScaleFactor;
@@ -114,22 +121,22 @@ AttributedString AdvancedTextViewShadowNode::getAttributedString(
   }
 
   // The component treats `lineHeight` as a multiple of the font's own
-  // natural line height (see setLineSpacing(0, multiplier) in
-  // AdvancedTextView.kt / the NSParagraphStyle-based spacing in
-  // AdvancedTextView.mm) -- NOT the absolute per-line value
-  // `TextAttributes.lineHeight` expects. A multiplier of 1 *is* the natural
-  // line height, so there is nothing to override in that case (and
-  // overriding it with an approximation, as this used to do unconditionally,
-  // made even the "no lineHeight override" case measure taller or shorter
-  // than the real render).
+  // natural line height (see CssLineHeightSpan.kt on Android / the
+  // NSParagraphStyle-based spacing in AdvancedTextView.mm on iOS) -- NOT the
+  // absolute per-line value `TextAttributes.lineHeight` expects. A multiplier
+  // of 1 *is* the natural line height, so there is nothing to override in
+  // that case (overriding it with an approximation, as this used to do
+  // unconditionally, made even the "no lineHeight override" case measure
+  // taller or shorter than the real render).
   if (props.lineHeight > 0 && props.lineHeight != 1.0) {
 #if defined(ANDROID)
     // Android's natural single-line height depends on the resolved
     // font/size/weight and isn't a fixed ratio of fontSize, so a constant
-    // approximation drifts from AdvancedTextView.kt's real
-    // setLineSpacing()-based layout by an amount that compounds with every
-    // wrapped line -- which is why the error scaled with paragraph length.
-    // Measure the real natural height for these exact attributes instead.
+    // approximation drifts from the real value CssLineHeightSpan.kt derives
+    // from Paint.getFontMetricsInt() -- by an amount that compounds with
+    // every wrapped line, which is why the error scaled with paragraph
+    // length. Measure the real natural height for these exact attributes
+    // instead, the same way the view derives it.
     auto naturalLineHeight =
         measureNaturalSingleLineHeight(layoutContext, textAttributes);
     textAttributes.lineHeight = naturalLineHeight > 0

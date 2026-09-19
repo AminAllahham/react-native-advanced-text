@@ -26,6 +26,7 @@ import android.text.Selection
 import android.graphics.Typeface
 import androidx.core.text.getSpans
 import com.facebook.react.common.assets.ReactFontManager
+import kotlin.math.ceil
 
 class AdvancedTextView : TextView {
 
@@ -294,7 +295,7 @@ class AdvancedTextView : TextView {
         }
 
 
-        setLineSpacing(0f, lineHeightMultiplier)
+        applyLineHeight(spannableString)
 
         // Android's letterSpacing is in em; the prop is in dp/points. The ratio
         // dp / fontSize is scale-invariant, so no density conversion is needed.
@@ -309,6 +310,41 @@ class AdvancedTextView : TextView {
             setText(spannableString, BufferType.SPANNABLE)
             Log.d(TAG, "Text updated with ${wordPositions.size} spans")
         }
+    }
+
+    /**
+     * Applies `lineHeightMultiplier` as a CSS-style, exact-per-line-height span
+     * instead of `setLineSpacing(0, multiplier)`.
+     *
+     * The Fabric ShadowNode measures `lineHeight` by asking React Native's own
+     * TextLayoutManager to lay out a fragment with that lineHeight -- which RN
+     * implements with its own CSS-style line-height span (every line's box is
+     * forced to exactly `lineHeight`, ascent/descent redistributed evenly).
+     * That is a *different* algorithm from `setLineSpacing`, which scales the
+     * font's natural per-line advance instead; the two do not produce the same
+     * total height, and the gap between them is added on every wrapped line,
+     * so it grows with text length. Using the same CSS-style algorithm here
+     * (see CssLineHeightSpan) keeps this view's rendered height identical to
+     * what was measured, regardless of how many lines the text wraps onto.
+     */
+    private fun applyLineHeight(spannableString: SpannableString) {
+        if (lineHeightMultiplier == 1.0f || spannableString.isEmpty()) {
+            return
+        }
+
+        val metrics = paint.fontMetricsInt
+        val naturalLineHeight = -metrics.ascent + metrics.descent
+        if (naturalLineHeight <= 0) {
+            return
+        }
+
+        val targetLineHeight = ceil(lineHeightMultiplier * naturalLineHeight).toInt()
+        spannableString.setSpan(
+            CssLineHeightSpan(targetLineHeight),
+            0,
+            spannableString.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
     }
 
     override fun onDraw(canvas: Canvas) {
