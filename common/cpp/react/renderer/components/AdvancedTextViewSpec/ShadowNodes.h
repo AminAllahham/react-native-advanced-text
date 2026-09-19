@@ -86,20 +86,7 @@ class AdvancedTextViewShadowNode final : public ConcreteViewShadowNode<
    * Builds a single-fragment `AttributedString` from the component props
    * (text + font attributes), mirroring how the native views render it.
    */
-  AttributedString getAttributedString(const LayoutContext& layoutContext) const;
-
-#if defined(ANDROID)
-  /*
-   * Measures the natural (multiplier == 1) height of a single line set in
-   * `baseTextAttributes`, by measuring a single glyph with `lineHeight`
-   * cleared. Used to turn the component's `lineHeight` multiplier prop into
-   * the absolute value `TextAttributes.lineHeight` expects, using this
-   * font's *real* metrics instead of an approximation.
-   */
-  Float measureNaturalSingleLineHeight(
-      const LayoutContext& layoutContext,
-      const TextAttributes& baseTextAttributes) const;
-#endif
+  AttributedString getAttributedString() const;
 
   // Lazily created on first measure, then reused / copied across clones.
   mutable std::shared_ptr<const TextLayoutManager> textLayoutManager_;

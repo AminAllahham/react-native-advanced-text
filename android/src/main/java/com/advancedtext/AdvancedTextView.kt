@@ -25,8 +25,6 @@ import com.facebook.react.uimanager.events.RCTEventEmitter
 import android.text.Selection
 import android.graphics.Typeface
 import androidx.core.text.getSpans
-import com.facebook.react.common.assets.ReactFontManager
-import kotlin.math.ceil
 
 class AdvancedTextView : TextView {
 
@@ -165,24 +163,8 @@ class AdvancedTextView : TextView {
     fun setAdvancedFontFamily(family: String) {
         if (fontFamily == family) return
         fontFamily = family
-        typeface = resolveTypeface(family, Typeface.NORMAL)
+        typeface = Typeface.create(family, Typeface.NORMAL)
     }
-
-    /**
-     * `Typeface.create(family, style)` only resolves OS-registered families; it
-     * silently substitutes a system font for anything bundled under
-     * `assets/fonts/` (the RN/Expo custom-font pipeline) instead of failing.
-     * The Fabric ShadowNode measures this component's text via
-     * `TextLayoutManager`, which resolves fonts through `ReactFontManager` -
-     * so a custom font here rendered with the substituted typeface has
-     * different glyph widths than what was measured, wrapping onto a
-     * different number of lines and producing extra height for some strings
-     * but not others. Going through `ReactFontManager` keeps the rendered
-     * typeface identical to the measured one (and is a no-op for system font
-     * names, which it falls back to `Typeface.create` for anyway).
-     */
-    private fun resolveTypeface(family: String, style: Int): Typeface =
-        ReactFontManager.getInstance().getTypeface(family, style, context.assets)
 
     fun setMenuOptions(menuOptions: List<String>) {
         if (this.menuOptions == menuOptions) return
@@ -289,13 +271,13 @@ class AdvancedTextView : TextView {
         setTextSize(fontSize)
 
         typeface = when (fontWeight) {
-            "bold" -> resolveTypeface(fontFamily, Typeface.BOLD)
-            "italic" -> resolveTypeface(fontFamily, Typeface.ITALIC)
-            else -> resolveTypeface(fontFamily, Typeface.NORMAL)
+            "bold" -> Typeface.create(fontFamily, Typeface.BOLD)
+            "italic" -> Typeface.create(fontFamily, Typeface.ITALIC)
+            else -> Typeface.create(fontFamily, Typeface.NORMAL)
         }
 
 
-        applyLineHeight(spannableString)
+        setLineSpacing(0f, lineHeightMultiplier)
 
         // Android's letterSpacing is in em; the prop is in dp/points. The ratio
         // dp / fontSize is scale-invariant, so no density conversion is needed.
@@ -310,41 +292,6 @@ class AdvancedTextView : TextView {
             setText(spannableString, BufferType.SPANNABLE)
             Log.d(TAG, "Text updated with ${wordPositions.size} spans")
         }
-    }
-
-    /**
-     * Applies `lineHeightMultiplier` as a CSS-style, exact-per-line-height span
-     * instead of `setLineSpacing(0, multiplier)`.
-     *
-     * The Fabric ShadowNode measures `lineHeight` by asking React Native's own
-     * TextLayoutManager to lay out a fragment with that lineHeight -- which RN
-     * implements with its own CSS-style line-height span (every line's box is
-     * forced to exactly `lineHeight`, ascent/descent redistributed evenly).
-     * That is a *different* algorithm from `setLineSpacing`, which scales the
-     * font's natural per-line advance instead; the two do not produce the same
-     * total height, and the gap between them is added on every wrapped line,
-     * so it grows with text length. Using the same CSS-style algorithm here
-     * (see CssLineHeightSpan) keeps this view's rendered height identical to
-     * what was measured, regardless of how many lines the text wraps onto.
-     */
-    private fun applyLineHeight(spannableString: SpannableString) {
-        if (lineHeightMultiplier == 1.0f || spannableString.isEmpty()) {
-            return
-        }
-
-        val metrics = paint.fontMetricsInt
-        val naturalLineHeight = -metrics.ascent + metrics.descent
-        if (naturalLineHeight <= 0) {
-            return
-        }
-
-        val targetLineHeight = ceil(lineHeightMultiplier * naturalLineHeight).toInt()
-        spannableString.setSpan(
-            CssLineHeightSpan(targetLineHeight),
-            0,
-            spannableString.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-        )
     }
 
     override fun onDraw(canvas: Canvas) {
