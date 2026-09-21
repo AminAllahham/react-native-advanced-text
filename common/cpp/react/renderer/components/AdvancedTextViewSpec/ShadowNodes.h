@@ -34,7 +34,6 @@
 
 #include <jsi/jsi.h>
 #include <react/renderer/attributedstring/AttributedString.h>
-#include <react/renderer/attributedstring/TextAttributes.h>
 #include <react/renderer/components/AdvancedTextViewSpec/EventEmitters.h>
 #include <react/renderer/components/AdvancedTextViewSpec/Props.h>
 #include <react/renderer/components/AdvancedTextViewSpec/States.h>
@@ -43,7 +42,6 @@
 #include <react/renderer/core/LayoutContext.h>
 #include <react/renderer/core/ShadowNode.h>
 #include <react/renderer/core/ShadowNodeFragment.h>
-#include <react/renderer/textlayoutmanager/TextLayoutContext.h>
 
 namespace facebook::react {
 
@@ -85,41 +83,25 @@ class AdvancedTextViewShadowNode final : public ConcreteViewShadowNode<
 
  private:
   /*
-   * Builds the font-related `TextAttributes` from the component props
-   * (family/weight/style/size/letterSpacing), *excluding* `lineHeight`.
-   * Shared between the natural-line-height probe and the real measurement so
-   * both resolve to the exact same font.
-   */
-  TextAttributes baseTextAttributes() const;
-
-  /*
-   * `lineHeight` is exposed to JS as a multiple of the font's own natural
-   * line height (see CssLineHeightSpan.kt on Android), NOT the absolute
-   * per-line value `TextAttributes::lineHeight` expects. A hardcoded ratio
-   * (e.g. `fontSize * 1.2`) is only an approximation of a font's real
-   * natural single-line height, and native font tables (especially OEM
-   * ones) can deviate from it enough to make Yoga's measured block height
-   * visibly disagree with what the native view actually draws. To keep them
-   * in sync, measure a single line of the same resolved font (no
-   * `lineHeight` override) and use its height as the real multiplier base --
-   * with `includeFontPadding = false`, matching the tight ascent+descent
-   * basis `Paint.getFontMetricsInt()` gives `CssLineHeightSpan.kt` on the
-   * view side (Android only; iOS's own NSParagraphStyle-based spacing in
-   * AdvancedTextView.mm doesn't need this).
-   */
-#if defined(ANDROID)
-  Float measureNaturalLineHeight(
-      const TextAttributes& baseTextAttributes,
-      const TextLayoutContext& textLayoutContext) const;
-#endif
-
-  /*
    * Builds a single-fragment `AttributedString` from the component props
    * (text + font attributes), mirroring how the native views render it.
+   * Deliberately never sets `lineHeight` -- see the .cpp for why.
    */
-  AttributedString getAttributedString(
-      const TextAttributes& baseTextAttributes,
-      const TextLayoutContext& textLayoutContext) const;
+  AttributedString getAttributedString() const;
+
+#if defined(ANDROID)
+  /*
+   * Asks Android's own `StaticLayout` (via a JNI call into
+   * `NativeTextMeasurement.measureHeight()`) for this text's real rendered
+   * height at the given width, instead of approximating it through RN's own
+   * `TextLayoutManager`. Returns height in dp, or a negative value if it
+   * couldn't be computed (e.g. unconstrained width), signaling the caller to
+   * fall back to the `TextLayoutManager`-based path.
+   */
+  Float measureHeightViaAndroidNative(
+      Float widthDp,
+      Float pointScaleFactor) const;
+#endif
 
   // Lazily created on first measure, then reused / copied across clones.
   mutable std::shared_ptr<const TextLayoutManager> textLayoutManager_;

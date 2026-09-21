@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <string>
 
 #include <react/renderer/attributedstring/AttributedStringBox.h>
@@ -20,6 +21,10 @@
 #include <react/renderer/mounting/ShadowView.h>
 #include <react/renderer/textlayoutmanager/TextLayoutContext.h>
 #include <react/renderer/textlayoutmanager/TextLayoutManager.h>
+
+#if defined(ANDROID)
+#include <fbjni/fbjni.h>
+#endif
 
 namespace facebook::react {
 
@@ -42,7 +47,7 @@ AdvancedTextViewShadowNode::AdvancedTextViewShadowNode(
           static_cast<const AdvancedTextViewShadowNode&>(sourceShadowNode)
               .textLayoutManager_) {}
 
-TextAttributes AdvancedTextViewShadowNode::baseTextAttributes() const {
+AttributedString AdvancedTextViewShadowNode::getAttributedString() const {
   const auto& props = getConcreteProps();
 
   auto textAttributes = TextAttributes::defaultTextAttributes();
@@ -68,78 +73,18 @@ TextAttributes AdvancedTextViewShadowNode::baseTextAttributes() const {
     textAttributes.letterSpacing = props.letterSpacing;
   }
 
-  return textAttributes;
-}
-
-#if defined(ANDROID)
-Float AdvancedTextViewShadowNode::measureNaturalLineHeight(
-    const TextAttributes& baseTextAttributes,
-    const TextLayoutContext& textLayoutContext) const {
-  // `baseTextAttributes` deliberately has no `lineHeight` set, so this
-  // resolves to the font's own natural single-line height -- exactly what
-  // CssLineHeightSpan.kt multiplies on the view side.
-  auto probeString = AttributedString{};
-  probeString.appendFragment(AttributedString::Fragment{
-      .string = "M",
-      .textAttributes = baseTextAttributes,
-      .parentShadowView = ShadowView(*this),
-  });
-
-  auto probeParagraphAttributes = ParagraphAttributes{};
-  probeParagraphAttributes.maximumNumberOfLines = 1;
-  // Measure the tight ascent+descent box (no extra top/bottom accent
-  // padding). This is the same "natural line height" basis
-  // CssLineHeightSpan.kt derives from `Paint.getFontMetricsInt()` on the
-  // view side (which is unaffected by `includeFontPadding`, a Layout-level
-  // setting) -- measuring with padding included here would double count it
-  // once per rendered line once the resulting value is multiplied and
-  // applied to the whole paragraph.
-  probeParagraphAttributes.includeFontPadding = false;
-
-  auto measurement = textLayoutManager_->measure(
-      AttributedStringBox{probeString},
-      probeParagraphAttributes,
-      textLayoutContext,
-      LayoutConstraints{});
-
-  return measurement.size.height;
-}
-#endif
-
-AttributedString AdvancedTextViewShadowNode::getAttributedString(
-    const TextAttributes& baseTextAttributes,
-    const TextLayoutContext& textLayoutContext) const {
-  const auto& props = getConcreteProps();
-
-  auto textAttributes = baseTextAttributes;
-
-  // The component treats `lineHeight` as a multiple of the font's own
-  // natural line height (see CssLineHeightSpan.kt on Android / the
-  // NSParagraphStyle-based spacing in AdvancedTextView.mm on iOS) -- NOT the
-  // absolute per-line value `TextAttributes::lineHeight` expects. A
-  // multiplier of 1 *is* the natural line height, so there is nothing to
-  // override in that case (overriding it with an approximation, as this
-  // used to do unconditionally, made even the "no lineHeight override" case
-  // measure taller or shorter than the real render).
-  if (props.lineHeight > 0 && props.lineHeight != 1.0) {
-#if defined(ANDROID)
-    // Android's natural single-line height depends on the resolved
-    // font/size/weight and isn't a fixed ratio of fontSize, so a constant
-    // approximation drifts from the real value CssLineHeightSpan.kt derives
-    // from Paint.getFontMetricsInt() -- by an amount that compounds with
-    // every wrapped line, which is why the error scaled with paragraph
-    // length. Measure the real natural height for these exact attributes
-    // instead, the same way the view derives it.
-    auto naturalLineHeight =
-        measureNaturalLineHeight(textAttributes, textLayoutContext);
-    textAttributes.lineHeight = naturalLineHeight > 0
-        ? props.lineHeight * naturalLineHeight
-        : props.lineHeight * textAttributes.fontSize * 1.2;
-#else
-    textAttributes.lineHeight =
-        props.lineHeight * textAttributes.fontSize * 1.2;
-#endif
-  }
+  // Deliberately never sets `textAttributes.lineHeight`: the component's
+  // `lineHeight` prop is a *multiple* of the font's natural line height (see
+  // `setLineSpacing(0, multiplier)` in AdvancedTextView.kt / the
+  // NSParagraphStyle-based spacing in AdvancedTextView.mm on iOS), not the
+  // absolute per-line value `TextAttributes::lineHeight` expects. Forcing an
+  // absolute value here would make Fabric apply RN's own CSS-style
+  // forced-line-height algorithm, which is a *different* algorithm from
+  // `setLineSpacing`'s multiplicative one and drifts from it by an amount
+  // that compounds with every wrapped line. Measuring naturally instead and
+  // scaling the *result* in `measureContent()` uses the same "multiply the
+  // natural total" math `setLineSpacing` itself uses, so they agree exactly
+  // regardless of paragraph length.
 
   auto attributedString = AttributedString{};
   attributedString.appendFragment(AttributedString::Fragment{
@@ -149,6 +94,61 @@ AttributedString AdvancedTextViewShadowNode::getAttributedString(
   });
   return attributedString;
 }
+
+#if defined(ANDROID)
+Float AdvancedTextViewShadowNode::measureHeightViaAndroidNative(
+    Float widthDp,
+    Float pointScaleFactor) const {
+  if (!std::isfinite(widthDp) || widthDp <= 0 || pointScaleFactor <= 0) {
+    return -1;
+  }
+
+  const auto& props = getConcreteProps();
+
+  const auto weight = toLowerAscii(props.fontWeight);
+  // Matches Typeface.NORMAL/BOLD/ITALIC -- the same three-way mapping
+  // AdvancedTextView.kt uses for `typeface = when (fontWeight) { ... }`.
+  int typefaceStyle = 0; // Typeface.NORMAL
+  if (weight == "bold") {
+    typefaceStyle = 1; // Typeface.BOLD
+  } else if (weight == "italic") {
+    typefaceStyle = 2; // Typeface.ITALIC
+  }
+
+  std::string fontFamily =
+      props.fontFamily.empty() ? "sans-serif" : props.fontFamily;
+  Float fontSize = props.fontSize > 0 ? props.fontSize : 16.0;
+  Float lineHeightMultiplier = props.lineHeight > 0 ? props.lineHeight : 1.0;
+  Float widthPx = widthDp * pointScaleFactor;
+
+  static const auto cls =
+      facebook::jni::findClassStatic("com/advancedtext/NativeTextMeasurement");
+  static const auto method = cls->getStaticMethod<jfloat(
+      std::string,
+      std::string,
+      jint,
+      jfloat,
+      jfloat,
+      jfloat,
+      jfloat)>("measureHeight");
+
+  Float heightPx = method(
+      cls,
+      props.text,
+      fontFamily,
+      typefaceStyle,
+      static_cast<jfloat>(fontSize),
+      static_cast<jfloat>(lineHeightMultiplier),
+      static_cast<jfloat>(props.letterSpacing),
+      static_cast<jfloat>(widthPx));
+
+  if (heightPx <= 0) {
+    return -1;
+  }
+
+  return heightPx / pointScaleFactor;
+}
+#endif
 
 Size AdvancedTextViewShadowNode::measureContent(
     const LayoutContext& layoutContext,
@@ -173,13 +173,40 @@ Size AdvancedTextViewShadowNode::measureContent(
   paragraphAttributes.adjustsFontSizeToFit = false;
 
   auto measurement = textLayoutManager_->measure(
-      AttributedStringBox{
-          getAttributedString(baseTextAttributes(), textLayoutContext)},
+      AttributedStringBox{getAttributedString()},
       paragraphAttributes,
       textLayoutContext,
       layoutConstraints);
 
-  return layoutConstraints.clamp(measurement.size);
+  auto size = measurement.size;
+
+#if defined(ANDROID)
+  // Prefer asking Android's own `StaticLayout` for the height directly (see
+  // `measureHeightViaAndroidNative()`) -- it's the same class
+  // `AdvancedTextView`'s real rendering is built on, so there's no
+  // measurement-vs-render drift to compound over long paragraphs. `size`
+  // (from RN's own TextLayoutManager, above) still supplies the width --
+  // this only replaces the height. Falls back to the `lineHeight`-scaling
+  // math below when the width isn't a finite, positive number (e.g. an
+  // unconstrained/intrinsic-width measure pass).
+  auto nativeHeight =
+      measureHeightViaAndroidNative(size.width, textLayoutContext.pointScaleFactor);
+  if (nativeHeight > 0) {
+    size.height = nativeHeight;
+    return layoutConstraints.clamp(size);
+  }
+#endif
+
+  // `lineHeight` scales the font's own natural line height (see
+  // `getAttributedString()`); since `size.height` above is the *natural*
+  // (multiplier == 1) total, `setLineSpacing(0, multiplier)` scaling the
+  // same natural total on the view side means multiplying it here
+  // reproduces exactly the same number, for any paragraph length.
+  if (props.lineHeight > 0) {
+    size.height *= props.lineHeight;
+  }
+
+  return layoutConstraints.clamp(size);
 }
 
 } // namespace facebook::react
