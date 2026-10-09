@@ -8,6 +8,9 @@ import java.util.ArrayList
 
 class AdvancedTextViewPackage : ReactPackage {
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
+    // Fabric measures text before any view exists, so hand the app's assets
+    // to the measurer as early as possible.
+    NativeTextMeasurement.assetManager = reactContext.assets
     val viewManagers: MutableList<ViewManager<*, *>> = ArrayList()
     viewManagers.add(AdvancedTextViewManager())
     return viewManagers

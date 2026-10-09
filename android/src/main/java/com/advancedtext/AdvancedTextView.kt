@@ -173,7 +173,7 @@ class AdvancedTextView : TextView {
     fun setAdvancedFontFamily(family: String) {
         if (fontFamily == family) return
         fontFamily = family
-        typeface = Typeface.create(family, Typeface.NORMAL)
+        typeface = NativeTextMeasurement.resolveTypeface(family, Typeface.NORMAL)
     }
 
     fun setMenuOptions(menuOptions: List<String>) {
@@ -281,9 +281,9 @@ class AdvancedTextView : TextView {
         setTextSize(fontSize)
 
         typeface = when (fontWeight) {
-            "bold" -> Typeface.create(fontFamily, Typeface.BOLD)
-            "italic" -> Typeface.create(fontFamily, Typeface.ITALIC)
-            else -> Typeface.create(fontFamily, Typeface.NORMAL)
+            "bold" -> NativeTextMeasurement.resolveTypeface(fontFamily, Typeface.BOLD)
+            "italic" -> NativeTextMeasurement.resolveTypeface(fontFamily, Typeface.ITALIC)
+            else -> NativeTextMeasurement.resolveTypeface(fontFamily, Typeface.NORMAL)
         }
 
 

@@ -9,6 +9,21 @@
 
 using namespace facebook::react;
 
+// Resolves a PostScript name, a family name, or an expo-font alias (expo-font
+// only hooks +fontNamesForFamilyName:, which is also what RN's <Text> uses).
+static UIFont *ATResolveFont(NSString *family, CGFloat size)
+{
+    if (family.length == 0) {
+        return nil;
+    }
+    UIFont *font = [UIFont fontWithName:family size:size];
+    if (font) {
+        return font;
+    }
+    NSString *fontName = [UIFont fontNamesForFamilyName:family].firstObject;
+    return fontName ? [UIFont fontWithName:fontName size:size] : nil;
+}
+
 
 @class AdvancedTextView;
 
@@ -446,10 +461,7 @@ using namespace facebook::react;
         if (_lineHeight > 0) {
             NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
 
-            UIFont *font = nil;
-            if (_fontFamily && _fontFamily.length > 0) {
-                font = [UIFont fontWithName:_fontFamily size:_fontSize > 0 ? _fontSize : 16.0];
-            }
+            UIFont *font = ATResolveFont(_fontFamily, _fontSize > 0 ? _fontSize : 16.0);
             if (!font) {
                 font = [UIFont systemFontOfSize:_fontSize > 0 ? _fontSize : 16.0];
             }
@@ -462,11 +474,7 @@ using namespace facebook::react;
                                      range:NSMakeRange(0, attributedString.length)];
         }
 
-        UIFont *font = nil;
-
-        if (_fontFamily && _fontFamily.length > 0) {
-            font = [UIFont fontWithName:_fontFamily size:_fontSize > 0 ? _fontSize : 16.0];
-        }
+        UIFont *font = ATResolveFont(_fontFamily, _fontSize > 0 ? _fontSize : 16.0);
 
         if (!font) {
             if (_fontWeight && [_fontWeight.lowercaseString isEqualToString:@"bold"]) {

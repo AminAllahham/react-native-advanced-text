@@ -1,10 +1,12 @@
 package com.advancedtext
 
+import android.content.res.AssetManager
 import android.content.res.Resources
 import android.graphics.Typeface
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.util.TypedValue
+import com.facebook.react.common.assets.ReactFontManager
 
 /**
  * JNI bridge so the Fabric ShadowNode (C++ `measureContent()`) can ask
@@ -31,6 +33,20 @@ import android.util.TypedValue
  */
 object NativeTextMeasurement {
 
+    /** App assets, so fonts bundled under `assets/fonts/` resolve here too. */
+    @Volatile
+    var assetManager: AssetManager? = null
+
+    /**
+     * Resolves a font family the way React Native's own <Text> does: fonts
+     * registered at runtime (expo-font), then `assets/fonts/<family>.ttf|otf`,
+     * then system families. `AdvancedTextView` uses this too, so measuring and
+     * rendering always pick the same typeface.
+     */
+    @JvmStatic
+    fun resolveTypeface(fontFamily: String, style: Int): Typeface =
+        ReactFontManager.getInstance().getTypeface(fontFamily, style, assetManager)
+
     @JvmStatic
     fun measureHeight(
         text: String,
@@ -50,7 +66,7 @@ object NativeTextMeasurement {
             TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, fontSizeSp, displayMetrics)
 
         val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG)
-        paint.typeface = Typeface.create(fontFamily, typefaceStyle)
+        paint.typeface = resolveTypeface(fontFamily, typefaceStyle)
         paint.textSize = fontSizePx
         // Mirrors AdvancedTextView's own letterSpacing conversion: dp/points
         // prop -> em, scale-invariant so no density conversion is needed.
