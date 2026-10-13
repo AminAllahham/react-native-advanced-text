@@ -15,6 +15,7 @@ import android.text.style.ClickableSpan
 import android.util.AttributeSet
 import android.util.Log
 import android.view.ActionMode
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -40,7 +41,8 @@ class AdvancedTextView : TextView {
     private var textColor: String = "#000000"
     private var fontSize: Float = 16f
     private var fontWeight: String = "normal"
-    private var textAlign: String = "left"
+    // "" = unset: natural alignment (start of the text's own direction).
+    private var textAlign: String = ""
     private var fontFamily: String = "sans-serif"
     private var lineHeightMultiplier: Float = 1.0f
     // Value from JS, in dp/points (0 = unset). Converted to em for TextView.
@@ -150,10 +152,24 @@ class AdvancedTextView : TextView {
     fun setAdvancedTextAlign(align: String) {
         if (textAlign == align) return
         textAlign = align
-        when (align) {
-            "left" -> textAlignment = View.TEXT_ALIGNMENT_TEXT_START
+        applyTextAlign()
+    }
+
+    // "left"/"right" are absolute edges, as on iOS. TEXT_START/TEXT_END follow
+    // the paragraph's direction, so RTL text (Arabic) with "right" would land
+    // on the left. Only TEXT_ALIGNMENT_GRAVITY with Gravity.LEFT/RIGHT is absolute.
+    private fun applyTextAlign() {
+        val vertical = gravity and Gravity.VERTICAL_GRAVITY_MASK
+        when (textAlign) {
+            "left" -> {
+                gravity = vertical or Gravity.LEFT
+                textAlignment = View.TEXT_ALIGNMENT_GRAVITY
+            }
+            "right" -> {
+                gravity = vertical or Gravity.RIGHT
+                textAlignment = View.TEXT_ALIGNMENT_GRAVITY
+            }
             "center" -> textAlignment = View.TEXT_ALIGNMENT_CENTER
-            "right" -> textAlignment = View.TEXT_ALIGNMENT_TEXT_END
             else -> textAlignment = View.TEXT_ALIGNMENT_TEXT_START
         }
     }
@@ -272,12 +288,7 @@ class AdvancedTextView : TextView {
             )
         }
 
-         textAlignment = when (textAlign) {
-            "left" -> View.TEXT_ALIGNMENT_TEXT_START
-            "center" -> View.TEXT_ALIGNMENT_CENTER
-            "right" -> View.TEXT_ALIGNMENT_TEXT_END
-            else -> View.TEXT_ALIGNMENT_TEXT_START
-        }
+        applyTextAlign()
 
         setTextSize(fontSize)
 
