@@ -19,6 +19,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.MotionEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
@@ -308,6 +309,15 @@ class AdvancedTextView : TextView {
         // need to wait for anything here, so there's nothing to defer for.
         setText(spannableString, BufferType.SPANNABLE)
         Log.d(TAG, "Text updated with ${wordPositions.size} spans")
+    }
+
+    // Every word is a ClickableSpan so a tap can report it, but TalkBack treats
+    // each span as a link: it reads the text one word at a time and lists every
+    // word under Actions. Plain text keeps it reading as prose; granularity
+    // navigation still works since the characters are identical.
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.text = text?.toString()
     }
 
     override fun onDraw(canvas: Canvas) {
