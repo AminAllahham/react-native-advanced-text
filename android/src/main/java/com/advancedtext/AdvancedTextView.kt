@@ -12,6 +12,7 @@ import android.text.Spanned
 import android.text.TextPaint
 import android.text.method.ArrowKeyMovementMethod
 import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.util.Log
 import android.view.ActionMode
@@ -53,6 +54,9 @@ class AdvancedTextView : TextView {
     private var indicatorMode: String = "Highlight"
 
     private var wordPositions: List<WordPosition> = emptyList()
+    // Each word's color span, kept so color changes can be applied to the live
+    // text. setText() would clear any selection the user is making.
+    private var wordColorSpans: Array<ForegroundColorSpan?> = emptyArray()
 
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
@@ -133,8 +137,10 @@ class AdvancedTextView : TextView {
     }
 
     fun setAdvancedTextColor(colorInt: Int) {
-          textColor = String.format("#%06X", 0xFFFFFF and colorInt)
-          updateTextWithHighlights()
+        val color = String.format("#%06X", 0xFFFFFF and colorInt)
+        if (textColor == color) return
+        textColor = color
+        updateWordColors()
     }
 
     fun setAdvancedTextSize(size: Float) {
@@ -202,7 +208,7 @@ class AdvancedTextView : TextView {
         if (indicatorWordIndex == index) return
         indicatorWordIndex = index
         if (indicatorMode == "fill") {
-            updateTextWithHighlights()
+            updateWordColors()
         } else {
             invalidate()
         }
@@ -212,7 +218,7 @@ class AdvancedTextView : TextView {
         if (indicatorColor == color) return
         indicatorColor = color
         if (indicatorMode == "fill") {
-            updateTextWithHighlights()
+            updateWordColors()
         } else {
             invalidate()
         }
@@ -221,7 +227,7 @@ class AdvancedTextView : TextView {
     fun setIndicatorMode(mode: String) {
         if (indicatorMode == mode) return
         indicatorMode = mode
-        updateTextWithHighlights()
+        updateWordColors()
         invalidate()
     }
 
@@ -268,25 +274,18 @@ class AdvancedTextView : TextView {
         val spannableString = SpannableString(currentText)
 
         wordPositions.forEach { wordPos ->
-            val wordColor = if (indicatorMode == "fill" &&
-                               indicatorWordIndex >= 0 &&
-                               wordPos.index <= indicatorWordIndex &&
-                               indicatorColor.isNotEmpty()) {
-                parseColor(indicatorColor)
-            } else {
-                parseColor(textColor)
-            }
             spannableString.setSpan(
                 WordClickableSpan(
                     wordIndex = wordPos.index,
-                    word = wordPos.word,
-                    wordColor = wordColor
+                    word = wordPos.word
                 ),
                 wordPos.start,
                 wordPos.end,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             )
         }
+        wordColorSpans = arrayOfNulls(wordPositions.size)
+        applyWordColors(spannableString)
 
         applyTextAlign()
 
@@ -320,6 +319,50 @@ class AdvancedTextView : TextView {
         // need to wait for anything here, so there's nothing to defer for.
         setText(spannableString, BufferType.SPANNABLE)
         Log.d(TAG, "Text updated with ${wordPositions.size} spans")
+    }
+
+    // Recolors words on the live text instead of rebuilding it, so the
+    // indicator can advance while the user is selecting text. Span changes go
+    // through TextView's ChangeWatcher, which redraws just the changed region
+    // and keeps the selection and its action mode.
+    private fun updateWordColors() {
+        if (currentText.isEmpty()) return
+        val spannable = text as? Spannable
+        if (spannable == null ||
+            spannable.length != currentText.length ||
+            wordColorSpans.size != wordPositions.size) {
+            updateTextWithHighlights()
+            return
+        }
+        applyWordColors(spannable)
+    }
+
+    // Only words whose color changed get a new span, so an indicator step
+    // touches one or two words rather than the whole paragraph.
+    private fun applyWordColors(spannable: Spannable) {
+        val baseColor = parseColor(textColor)
+        val fillColor = if (indicatorMode == "fill" &&
+                            indicatorWordIndex >= 0 &&
+                            indicatorColor.isNotEmpty()) {
+            parseColor(indicatorColor)
+        } else {
+            null
+        }
+
+        wordPositions.forEach { wordPos ->
+            val color = if (fillColor != null && wordPos.index <= indicatorWordIndex) {
+                fillColor
+            } else {
+                baseColor
+            }
+            val current = wordColorSpans[wordPos.index]
+            if (current?.foregroundColor == color) return@forEach
+
+            current?.let { spannable.removeSpan(it) }
+            val span = ForegroundColorSpan(color)
+            spannable.setSpan(span, wordPos.start, wordPos.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            wordColorSpans[wordPos.index] = span
+        }
     }
 
     // Every word is a ClickableSpan so a tap can report it, but TalkBack treats
@@ -448,8 +491,7 @@ class AdvancedTextView : TextView {
 
     private inner class WordClickableSpan(
         private val wordIndex: Int,
-        private val word: String,
-        private val wordColor: Int
+        private val word: String
     ) : ClickableSpan() {
 
         override fun onClick(widget: View) {
@@ -457,10 +499,10 @@ class AdvancedTextView : TextView {
             sendWordPressEvent(word, wordIndex)
         }
 
+        // Skips super, which would paint the word in the link color and
+        // underline it. The word's color comes from its ForegroundColorSpan.
         override fun updateDrawState(ds: TextPaint) {
-            super.updateDrawState(ds)
             ds.isUnderlineText = false
-            ds.color = wordColor
         }
     }
 

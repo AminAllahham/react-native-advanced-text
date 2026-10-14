@@ -268,6 +268,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         }
 
         BOOL indicatorChanged = NO;
+        BOOL indicatorModeChanged = NO;
 
         if (oldViewProps.indicatorMode != newViewProps.indicatorMode) {
             NSLog(@"[AdvancedTextView] Updating indicatorMode to: %s", newViewProps.indicatorMode.c_str());
@@ -275,6 +276,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
                 ? @"Highlight"
                 : [NSString stringWithUTF8String:newViewProps.indicatorMode.c_str()];
             indicatorChanged = YES;
+            indicatorModeChanged = YES;
         }
 
         if (oldViewProps.indicatorWordIndex != newViewProps.indicatorWordIndex) {
@@ -295,11 +297,10 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         }
 
         if (indicatorChanged) {
-            if ([_indicatorMode isEqualToString:@"fill"]) {
-                [self updateTextAppearance]; // rebuilds attributed text with fill colors; calls setNeedsDisplay
-            } else {
-                [_textView setNeedsDisplay];
+            if ([_indicatorMode isEqualToString:@"fill"] || indicatorModeChanged) {
+                [self updateWordColors];
             }
+            [_textView setNeedsDisplay];
         }
 
         if (textChanged) {
@@ -497,22 +498,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         }
 
 
-        UIColor *color = _textColor ?: [UIColor labelColor];
-        [attributedString addAttribute:NSForegroundColorAttributeName
-                                 value:color
-                                 range:NSMakeRange(0, attributedString.length)];
-
-        if ([_indicatorMode isEqualToString:@"fill"] && _indicatorWordIndex >= 0 && _indicatorColor) {
-            for (NSDictionary *wordInfo in _wordRanges) {
-                NSInteger idx = [wordInfo[@"index"] integerValue];
-                if (idx <= _indicatorWordIndex) {
-                    NSRange wordRange = [wordInfo[@"range"] rangeValue];
-                    [attributedString addAttribute:NSForegroundColorAttributeName
-                                             value:_indicatorColor
-                                             range:wordRange];
-                }
-            }
-        }
+        [self applyWordColorsToString:attributedString];
 
         _textView.attributedText = attributedString;
         [_textView setNeedsDisplay];
@@ -531,6 +517,50 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 
     } @catch (NSException *exception) {
         NSLog(@"[AdvancedTextView] Exception in updateTextAppearance: %@", exception.reason);
+    }
+}
+
+- (void)applyWordColorsToString:(NSMutableAttributedString *)string
+{
+    UIColor *color = _textColor ?: [UIColor labelColor];
+    [string addAttribute:NSForegroundColorAttributeName
+                   value:color
+                   range:NSMakeRange(0, string.length)];
+
+    if (![_indicatorMode isEqualToString:@"fill"] || _indicatorWordIndex < 0 || !_indicatorColor) {
+        return;
+    }
+
+    for (NSDictionary *wordInfo in _wordRanges) {
+        if ([wordInfo[@"index"] integerValue] > _indicatorWordIndex) {
+            break;
+        }
+        NSRange wordRange = [wordInfo[@"range"] rangeValue];
+        if (NSMaxRange(wordRange) > string.length) {
+            break;
+        }
+        [string addAttribute:NSForegroundColorAttributeName
+                       value:_indicatorColor
+                       range:wordRange];
+    }
+}
+
+// Recolors the live textStorage instead of reassigning attributedText, so the
+// indicator can advance while the user is selecting text: attribute-only
+// edits keep selectedRange and the edit menu, assigning attributedText resets them.
+- (void)updateWordColors
+{
+    @try {
+        NSTextStorage *storage = _textView.textStorage;
+        if (storage.length == 0) {
+            return;
+        }
+
+        [storage beginEditing];
+        [self applyWordColorsToString:storage];
+        [storage endEditing];
+    } @catch (NSException *exception) {
+        NSLog(@"[AdvancedTextView] Exception in updateWordColors: %@", exception.reason);
     }
 }
 
