@@ -3,9 +3,12 @@ package com.advancedtext
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Point
 import android.graphics.RectF
 import android.os.Build
+import android.text.Layout
 import android.text.SpannableString
 import android.text.Spannable
 import android.text.Spanned
@@ -57,6 +60,12 @@ class AdvancedTextView : TextView {
     // Each word's color span, kept so color changes can be applied to the live
     // text. setText() would clear any selection the user is making.
     private var wordColorSpans: Array<ForegroundColorSpan?> = emptyArray()
+
+    // Reused on every draw for the highlight backgrounds.
+    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rangePath = Path()
+    private val lineClipPath = Path()
+    private val rangeBounds = RectF()
 
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
@@ -382,87 +391,78 @@ class AdvancedTextView : TextView {
     private fun drawHighlightedWordBackgrounds(canvas: Canvas) {
         val currentLayout = layout ?: return
         val density = resources.displayMetrics.density
-        val originalColor = paint.color
 
         highlightedWords.forEach { highlightedWord ->
             val wordPos = wordPositions.find { it.index == highlightedWord.index } ?: return@forEach
-            val start = wordPos.start
-            val end = wordPos.extendedEnd.coerceAtMost(currentText.length)
-
-            if (start >= end) return@forEach
-
-            val startLine = currentLayout.getLineForOffset(start)
-            val safeEndOffset = (end - 1).coerceAtLeast(start)
-            val endLine = currentLayout.getLineForOffset(safeEndOffset)
-
-            paint.color = parseColor(highlightedWord.highlightColor)
-
-            for (line in startLine..endLine) {
-                val lineStartOffset = maxOf(start, currentLayout.getLineStart(line))
-                val lineEndOffset = minOf(end, currentLayout.getLineEnd(line))
-                if (lineStartOffset >= lineEndOffset) continue
-
-                val left = currentLayout.getPrimaryHorizontal(lineStartOffset)
-                val isLastWordOnLine = lineEndOffset >= currentLayout.getLineEnd(line)
-                val right = if (isLastWordOnLine) {
-                    currentLayout.getLineRight(line)
-                } else {
-                    currentLayout.getPrimaryHorizontal(lineEndOffset)
-                }
-                val top = currentLayout.getLineTop(line).toFloat()
-                val bottom = currentLayout.getLineBottom(line).toFloat()
-                val rect = RectF(
-                    totalPaddingLeft + left,
-                    totalPaddingTop + top,
-                    totalPaddingLeft + right,
-                    totalPaddingTop + bottom
-                )
-                val radius = highlightedWord.borderRadius * density
-                canvas.drawRoundRect(rect, radius, radius, paint)
-            }
+            drawRangeBackground(
+                canvas,
+                currentLayout,
+                wordPos.start,
+                wordPos.extendedEnd.coerceAtMost(currentText.length),
+                parseColor(highlightedWord.highlightColor),
+                highlightedWord.borderRadius * density
+            )
         }
 
         // Draw indicator background only in Highlight mode
         if (indicatorMode != "fill" && indicatorWordIndex >= 0 && indicatorColor.isNotEmpty()) {
             val wordPos = wordPositions.find { it.index == indicatorWordIndex }
             if (wordPos != null) {
-                val start = wordPos.start
-                val end = wordPos.end.coerceAtMost(currentText.length)
-
-                if (start < end) {
-                    val startLine = currentLayout.getLineForOffset(start)
-                    val safeEndOffset = (end - 1).coerceAtLeast(start)
-                    val endLine = currentLayout.getLineForOffset(safeEndOffset)
-
-                    paint.color = parseColor(indicatorColor)
-
-                    for (line in startLine..endLine) {
-                        val lineStartOffset = maxOf(start, currentLayout.getLineStart(line))
-                        val lineEndOffset = minOf(end, currentLayout.getLineEnd(line))
-                        if (lineStartOffset >= lineEndOffset) continue
-
-                        val left = currentLayout.getPrimaryHorizontal(lineStartOffset)
-                        val isLastWordOnLine = lineEndOffset >= currentLayout.getLineEnd(line)
-                        val right = if (isLastWordOnLine) {
-                            currentLayout.getLineRight(line)
-                        } else {
-                            currentLayout.getPrimaryHorizontal(lineEndOffset)
-                        }
-                        val top = currentLayout.getLineTop(line).toFloat()
-                        val bottom = currentLayout.getLineBottom(line).toFloat()
-                        val rect = RectF(
-                            totalPaddingLeft + left,
-                            totalPaddingTop + top,
-                            totalPaddingLeft + right,
-                            totalPaddingTop + bottom
-                        )
-                        canvas.drawRoundRect(rect, 0f, 0f, paint)
-                    }
-                }
+                drawRangeBackground(
+                    canvas,
+                    currentLayout,
+                    wordPos.start,
+                    wordPos.end.coerceAtMost(currentText.length),
+                    parseColor(indicatorColor),
+                    0f
+                )
             }
         }
+    }
 
-        paint.color = originalColor
+    // Fills the background of text[start, end), one box per line. The edges
+    // come from Layout.getSelectionPath, which follows the text's direction:
+    // a right-to-left word (Arabic) starts at its right edge, so treating
+    // getPrimaryHorizontal(start) as the left edge drew boxes in the wrong place.
+    private fun drawRangeBackground(
+        canvas: Canvas,
+        layout: Layout,
+        start: Int,
+        end: Int,
+        color: Int,
+        radius: Float
+    ) {
+        if (start >= end) return
+        highlightPaint.color = color
+
+        val startLine = layout.getLineForOffset(start)
+        val endLine = layout.getLineForOffset(end - 1)
+        for (line in startLine..endLine) {
+            val segmentStart = maxOf(start, layout.getLineStart(line))
+            val segmentEnd = minOf(end, layout.getLineEnd(line))
+            if (segmentStart >= segmentEnd) continue
+
+            rangePath.reset()
+            layout.getSelectionPath(segmentStart, segmentEnd, rangePath)
+
+            // A range reaching the end of a line counts as running onto the
+            // next one, so the selection path fills out to the view's edge.
+            // Clip to this line's text to stop the box at the last word.
+            lineClipPath.reset()
+            lineClipPath.addRect(
+                layout.getLineLeft(line),
+                layout.getLineTop(line).toFloat(),
+                layout.getLineRight(line),
+                layout.getLineBottom(line).toFloat(),
+                Path.Direction.CW
+            )
+            rangePath.op(lineClipPath, Path.Op.INTERSECT)
+            rangePath.computeBounds(rangeBounds, true)
+            if (rangeBounds.isEmpty) continue
+
+            rangeBounds.offset(totalPaddingLeft.toFloat(), totalPaddingTop.toFloat())
+            canvas.drawRoundRect(rangeBounds, radius, radius, highlightPaint)
+        }
     }
 
     private fun parseColor(colorString: String): Int {
