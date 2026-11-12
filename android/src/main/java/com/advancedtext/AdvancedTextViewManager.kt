@@ -54,7 +54,10 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
                                 wordMap.getDouble("borderRadius").toFloat()
                             } else {
                                 0f
-                            }
+                            },
+                            underline = wordMap.hasKey("underline") &&
+                                !wordMap.isNull("underline") &&
+                                wordMap.getBoolean("underline")
                         )
                     )
                 }

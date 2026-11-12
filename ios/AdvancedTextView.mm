@@ -31,6 +31,9 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *wordRanges;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSDictionary *> *highlightStyles;
+// Underline colors by word index, kept apart from highlightStyles so a word
+// can be both highlighted and underlined.
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIColor *> *underlineStyles;
 @property (nonatomic, strong) NSArray<NSString *> *menuOptions;
 @property (nonatomic, assign) CGFloat fontSize;
 @property (nonatomic, strong) NSString *fontWeight;
@@ -109,6 +112,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 
             _wordRanges = [NSMutableArray array];
             _highlightStyles = [NSMutableDictionary dictionary];
+            _underlineStyles = [NSMutableDictionary dictionary];
             _fontSize = 16.0;
             _fontWeight = @"normal";
             _textColor = [UIColor labelColor];
@@ -237,7 +241,8 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
                 const auto &newHW = newViewProps.highlightedWords[i];
                 if (oldHW.index != newHW.index ||
                     oldHW.highlightColor != newHW.highlightColor ||
-                    oldHW.borderRadius != newHW.borderRadius) {
+                    oldHW.borderRadius != newHW.borderRadius ||
+                    oldHW.underline != newHW.underline) {
                     highlightsChanged = YES;
                     break;
                 }
@@ -410,6 +415,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
           highlightedWords.size());
     @try {
         [_highlightStyles removeAllObjects];
+        [_underlineStyles removeAllObjects];
 
         for (const auto &hw : highlightedWords) {
             NSInteger index = hw.index;
@@ -417,7 +423,9 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
             UIColor *color = [self hexStringToColor:colorString];
             CGFloat borderRadius = static_cast<CGFloat>(hw.borderRadius);
 
-            if (color) {
+            if (color && hw.underline) {
+                _underlineStyles[@(index)] = color;
+            } else if (color) {
                 _highlightStyles[@(index)] = @{
                     @"color": color,
                     @"borderRadius": @(MAX(borderRadius, 0.0))
@@ -499,6 +507,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 
 
         [self applyWordColorsToString:attributedString];
+        [self applyUnderlinesToString:attributedString];
 
         _textView.attributedText = attributedString;
         [_textView setNeedsDisplay];
@@ -542,6 +551,29 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         [string addAttribute:NSForegroundColorAttributeName
                        value:_indicatorColor
                        range:wordRange];
+    }
+}
+
+// A text underline under each underlined word, but not the space after it.
+- (void)applyUnderlinesToString:(NSMutableAttributedString *)string
+{
+    if (_underlineStyles.count == 0) {
+        return;
+    }
+
+    for (NSDictionary *wordInfo in _wordRanges) {
+        UIColor *color = _underlineStyles[wordInfo[@"index"]];
+        if (!color) {
+            continue;
+        }
+        NSRange wordRange = [wordInfo[@"range"] rangeValue];
+        if (NSMaxRange(wordRange) > string.length) {
+            break;
+        }
+        [string addAttributes:@{
+            NSUnderlineStyleAttributeName: @(NSUnderlineStyleSingle),
+            NSUnderlineColorAttributeName: color
+        } range:wordRange];
     }
 }
 

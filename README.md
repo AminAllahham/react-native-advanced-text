@@ -38,6 +38,11 @@ import { AdvancedText } from "react-native-advanced-text";
       highlightColor: '#6baeffb5',
       borderRadius: 6,
     },
+    {
+      index: 7,
+      highlightColor: '#818CF8',
+      underline: true, // a line under the word instead of a background
+    },
   ]}
   fontSize={24}
   color={'#FFFFFF'}
@@ -46,6 +51,13 @@ import { AdvancedText } from "react-native-advanced-text";
   letterSpacing={1}
 />
 ```
+
+## Underlined words
+
+An entry in `highlightedWords` with `underline: true` draws a line under the
+word in `highlightColor` instead of filling its background (`borderRadius` is
+ignored). A word can be both highlighted and underlined: list it twice, once
+with `underline: true` and once without.
 
 ## Sizing
 

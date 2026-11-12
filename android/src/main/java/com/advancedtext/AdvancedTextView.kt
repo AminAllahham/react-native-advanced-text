@@ -66,6 +66,7 @@ class AdvancedTextView : TextView {
     private val rangePath = Path()
     private val lineClipPath = Path()
     private val rangeBounds = RectF()
+    private val underlineBounds = RectF()
 
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
@@ -394,14 +395,25 @@ class AdvancedTextView : TextView {
 
         highlightedWords.forEach { highlightedWord ->
             val wordPos = wordPositions.find { it.index == highlightedWord.index } ?: return@forEach
-            drawRangeBackground(
-                canvas,
-                currentLayout,
-                wordPos.start,
-                wordPos.extendedEnd.coerceAtMost(currentText.length),
-                parseColor(highlightedWord.highlightColor),
-                highlightedWord.borderRadius * density
-            )
+            if (highlightedWord.underline) {
+                // The word, but not the space after it.
+                drawRangeUnderline(
+                    canvas,
+                    currentLayout,
+                    wordPos.start,
+                    wordPos.end.coerceAtMost(currentText.length),
+                    parseColor(highlightedWord.highlightColor)
+                )
+            } else {
+                drawRangeBackground(
+                    canvas,
+                    currentLayout,
+                    wordPos.start,
+                    wordPos.extendedEnd.coerceAtMost(currentText.length),
+                    parseColor(highlightedWord.highlightColor),
+                    highlightedWord.borderRadius * density
+                )
+            }
         }
 
         // Draw indicator background only in Highlight mode
@@ -420,10 +432,7 @@ class AdvancedTextView : TextView {
         }
     }
 
-    // Fills the background of text[start, end), one box per line. The edges
-    // come from Layout.getSelectionPath, which follows the text's direction:
-    // a right-to-left word (Arabic) starts at its right edge, so treating
-    // getPrimaryHorizontal(start) as the left edge drew boxes in the wrong place.
+    // Fills the background of text[start, end), one box per line.
     private fun drawRangeBackground(
         canvas: Canvas,
         layout: Layout,
@@ -432,8 +441,44 @@ class AdvancedTextView : TextView {
         color: Int,
         radius: Float
     ) {
-        if (start >= end) return
         highlightPaint.color = color
+        forEachLineOfRange(layout, start, end) {
+            canvas.drawRoundRect(rangeBounds, radius, radius, highlightPaint)
+        }
+    }
+
+    // Draws a line under text[start, end), one per line it spans, just below
+    // the baseline like a text underline.
+    private fun drawRangeUnderline(
+        canvas: Canvas,
+        layout: Layout,
+        start: Int,
+        end: Int,
+        color: Int
+    ) {
+        val density = resources.displayMetrics.density
+        val thickness = UNDERLINE_THICKNESS_DP * density
+        val gap = UNDERLINE_GAP_DP * density
+        highlightPaint.color = color
+        forEachLineOfRange(layout, start, end) { line ->
+            val top = layout.getLineBaseline(line) + totalPaddingTop + gap
+            underlineBounds.set(rangeBounds.left, top, rangeBounds.right, top + thickness)
+            canvas.drawRoundRect(underlineBounds, thickness / 2, thickness / 2, highlightPaint)
+        }
+    }
+
+    // Calls draw for each line text[start, end) spans, with rangeBounds set to
+    // that line's part of the range in view coordinates. The edges come from
+    // Layout.getSelectionPath, which follows the text's direction: a
+    // right-to-left word (Arabic) starts at its right edge, so treating
+    // getPrimaryHorizontal(start) as the left edge put boxes in the wrong place.
+    private inline fun forEachLineOfRange(
+        layout: Layout,
+        start: Int,
+        end: Int,
+        draw: (line: Int) -> Unit
+    ) {
+        if (start >= end) return
 
         val startLine = layout.getLineForOffset(start)
         val endLine = layout.getLineForOffset(end - 1)
@@ -461,7 +506,7 @@ class AdvancedTextView : TextView {
             if (rangeBounds.isEmpty) continue
 
             rangeBounds.offset(totalPaddingLeft.toFloat(), totalPaddingTop.toFloat())
-            canvas.drawRoundRect(rangeBounds, radius, radius, highlightPaint)
+            draw(line)
         }
     }
 
@@ -589,5 +634,10 @@ class AdvancedTextView : TextView {
 data class HighlightedWord(
     val index: Int,
     val highlightColor: String,
-    val borderRadius: Float = 0f
+    val borderRadius: Float = 0f,
+    // Draws a line under the word instead of filling its background.
+    val underline: Boolean = false
 )
+
+private const val UNDERLINE_THICKNESS_DP = 1.5f
+private const val UNDERLINE_GAP_DP = 2.5f

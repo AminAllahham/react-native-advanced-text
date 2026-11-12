@@ -8,6 +8,9 @@ interface HighlightedWord {
   index: Int32;
   highlightColor: string;
   borderRadius?: Float;
+  // Underlines the word in highlightColor instead of filling its background.
+  // A word can have both: list it once with and once without.
+  underline?: boolean;
 }
 
 export interface NativeProps extends ViewProps {
