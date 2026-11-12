@@ -91,6 +91,11 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 @interface AdvancedTextView () <RCTAdvancedTextViewViewProtocol, UIGestureRecognizerDelegate, UITextViewDelegate>
 
 @property (nonatomic, strong) CustomTextView *textView;
+@property (nonatomic, strong) UITapGestureRecognizer *singleTapGesture;
+@property (nonatomic, strong) UITapGestureRecognizer *doubleTapGesture;
+@property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
+// On while the app handles double taps (onWordDoublePress).
+@property (nonatomic, assign) BOOL wordDoublePressEnabled;
 
 @end
 
@@ -177,6 +182,24 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
                                               action:@selector(handleTap:)];
         tapGesture.delegate = self;
         [_textView addGestureRecognizer:tapGesture];
+        _singleTapGesture = tapGesture;
+
+        // Off until the app handles double taps, so taps aren't delayed.
+        UITapGestureRecognizer *doubleTapGesture = [[UITapGestureRecognizer alloc]
+                                                    initWithTarget:self
+                                                    action:@selector(handleDoubleTap:)];
+        doubleTapGesture.numberOfTapsRequired = 2;
+        doubleTapGesture.delegate = self;
+        doubleTapGesture.enabled = NO;
+        [_textView addGestureRecognizer:doubleTapGesture];
+        _doubleTapGesture = doubleTapGesture;
+
+        UILongPressGestureRecognizer *longPressGesture = [[UILongPressGestureRecognizer alloc]
+                                                          initWithTarget:self
+                                                          action:@selector(handleLongPress:)];
+        longPressGesture.delegate = self;
+        [_textView addGestureRecognizer:longPressGesture];
+        _longPressGesture = longPressGesture;
 
         NSLog(@"[AdvancedTextView] Gesture recognizers setup successful");
     } @catch (NSException *exception) {
@@ -226,6 +249,11 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
             NSString *colorStr = [NSString stringWithUTF8String:newViewProps.color.c_str()];
             _textColor = [self hexStringToColor:colorStr];
             styleChanged = YES;
+        }
+
+        if (oldViewProps.wordDoublePressEnabled != newViewProps.wordDoublePressEnabled) {
+            _wordDoublePressEnabled = newViewProps.wordDoublePressEnabled;
+            _doubleTapGesture.enabled = _wordDoublePressEnabled;
         }
 
         if (oldViewProps.text != newViewProps.text) {
@@ -693,6 +721,89 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
     }
 }
 
+- (void)handleDoubleTap:(UITapGestureRecognizer *)gesture
+{
+    @try {
+        if (gesture.state != UIGestureRecognizerStateEnded) return;
+
+        // In case the text view selected anything before giving way.
+        _textView.selectedTextRange = nil;
+
+        NSInteger wordIndex = [self wordIndexAtPoint:[gesture locationInView:_textView]];
+        if (wordIndex >= 0 && wordIndex < _wordRanges.count) {
+            [self emitWordEvent:@"doublePress" word:_wordRanges[wordIndex][@"word"] index:wordIndex];
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[AdvancedTextView] Exception in handleDoubleTap: %@", exception);
+    }
+}
+
+// Only reports the word: the text view's own long press still starts a selection.
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture
+{
+    @try {
+        if (gesture.state != UIGestureRecognizerStateBegan) return;
+
+        NSInteger wordIndex = [self wordIndexAtPoint:[gesture locationInView:_textView]];
+        if (wordIndex >= 0 && wordIndex < _wordRanges.count) {
+            [self emitWordEvent:@"longPress" word:_wordRanges[wordIndex][@"word"] index:wordIndex];
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[AdvancedTextView] Exception in handleLongPress: %@", exception);
+    }
+}
+
+#pragma mark - UIGestureRecognizerDelegate
+
+// While double taps are handled, a single tap waits to see whether a second
+// one follows, so a double tap doesn't also fire onWordPress.
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
+{
+    return _wordDoublePressEnabled &&
+        gestureRecognizer == _singleTapGesture &&
+        otherGestureRecognizer == _doubleTapGesture;
+}
+
+// The text view's own double tap selects the word. It waits for ours, which
+// wins on every double tap, so a double tap never selects text.
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
+{
+    if (!_wordDoublePressEnabled || gestureRecognizer != _doubleTapGesture) {
+        return NO;
+    }
+    if (![otherGestureRecognizer isKindOfClass:[UITapGestureRecognizer class]]) {
+        return NO;
+    }
+    return ((UITapGestureRecognizer *)otherGestureRecognizer).numberOfTapsRequired >= 2;
+}
+
+// The long press runs alongside the text view's own, which starts the selection.
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
+{
+    return gestureRecognizer == _longPressGesture || otherGestureRecognizer == _longPressGesture;
+}
+
+// The first and last word a character range touches, or -1 for none.
+- (void)wordIndexesForRange:(NSRange)range first:(NSInteger *)first last:(NSInteger *)last
+{
+    *first = -1;
+    *last = -1;
+    for (NSDictionary *wordInfo in _wordRanges) {
+        NSRange wordRange = [wordInfo[@"range"] rangeValue];
+        if (NSIntersectionRange(wordRange, range).length == 0) {
+            continue;
+        }
+        NSInteger index = [wordInfo[@"index"] integerValue];
+        if (*first < 0) {
+            *first = index;
+        }
+        *last = index;
+    }
+}
+
 #pragma mark - UITextViewDelegate
 
 - (void)textViewDidChangeSelection:(UITextView *)textView
@@ -815,6 +926,29 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
     }
 }
 
+// onWordDoublePress ("doublePress") or onWordLongPress ("longPress").
+- (void)emitWordEvent:(NSString *)type word:(NSString *)word index:(NSInteger)index
+{
+    @try {
+        if (!_eventEmitter) return;
+        auto emitter = std::static_pointer_cast<const AdvancedTextViewEventEmitter>(_eventEmitter);
+
+        if ([type isEqualToString:@"doublePress"]) {
+            AdvancedTextViewEventEmitter::OnWordDoublePress event;
+            event.word = [word UTF8String];
+            event.index = static_cast<int>(index);
+            emitter->onWordDoublePress(event);
+        } else {
+            AdvancedTextViewEventEmitter::OnWordLongPress event;
+            event.word = [word UTF8String];
+            event.index = static_cast<int>(index);
+            emitter->onWordLongPress(event);
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[AdvancedTextView] Exception in emitWordEvent: %@", exception);
+    }
+}
+
 - (void)emitSelectionEvent:(NSString *)selectedText menuOption:(NSString *)option
 {
     NSLog(@"[AdvancedTextView] emitSelectionEvent: %@ with option: %@", selectedText, option);
@@ -822,9 +956,15 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         if (_eventEmitter) {
             auto emitter = std::static_pointer_cast<const AdvancedTextViewEventEmitter>(_eventEmitter);
 
+            NSInteger firstWord = -1;
+            NSInteger lastWord = -1;
+            [self wordIndexesForRange:_textView.selectedRange first:&firstWord last:&lastWord];
+
             AdvancedTextViewEventEmitter::OnSelection event;
             event.selectedText = [selectedText UTF8String];
             event.event = [option UTF8String];
+            event.startWordIndex = static_cast<int>(firstWord);
+            event.endWordIndex = static_cast<int>(lastWord);
 
             emitter->onSelection(event);
         }

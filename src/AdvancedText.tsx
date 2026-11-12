@@ -9,6 +9,8 @@ export const AdvancedText: React.FC<NativeProps> = ({
   highlightedWords,
   menuOptions,
   onWordPress,
+  onWordDoublePress,
+  onWordLongPress,
   onSelection,
   ...restProps
 }) => {
@@ -20,7 +22,11 @@ export const AdvancedText: React.FC<NativeProps> = ({
       highlightedWords={highlightedWords}
       menuOptions={menuOptions}
       onWordPress={onWordPress}
+      onWordDoublePress={onWordDoublePress}
+      onWordLongPress={onWordLongPress}
       onSelection={onSelection}
+      // Only apps that handle double taps pay the single-tap delay.
+      wordDoublePressEnabled={!!onWordDoublePress}
     />
   );
 };

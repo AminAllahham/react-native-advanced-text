@@ -18,7 +18,21 @@ export interface NativeProps extends ViewProps {
   highlightedWords?: ReadonlyArray<HighlightedWord>;
   menuOptions?: ReadonlyArray<string>;
   onWordPress?: DirectEventHandler<{ word: string; index: Int32 }>;
-  onSelection?: DirectEventHandler<{ selectedText: string; event: string }>;
+  // A double tap on a word. It never selects text.
+  onWordDoublePress?: DirectEventHandler<{ word: string; index: Int32 }>;
+  // A long press on a word. Text selection still starts as usual.
+  onWordLongPress?: DirectEventHandler<{ word: string; index: Int32 }>;
+  // startWordIndex/endWordIndex: the first and last word the selection
+  // touches, or -1 when it touches none.
+  onSelection?: DirectEventHandler<{
+    selectedText: string;
+    event: string;
+    startWordIndex: Int32;
+    endWordIndex: Int32;
+  }>;
+  // Set by AdvancedText when onWordDoublePress is given. While on, a single
+  // tap waits out the double-tap delay before firing onWordPress.
+  wordDoublePressEnabled?: boolean;
   fontSize?: Int32;
   fontWeight?: string;
   color?: string;

@@ -24,6 +24,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
 import com.facebook.react.bridge.Arguments
@@ -40,6 +41,8 @@ class AdvancedTextView : TextView {
     private var highlightedWords: List<HighlightedWord> = emptyList()
     private var menuOptions: List<String> = emptyList()
     private var lastSelectedText: String = ""
+    // First and last word index the selection touches, -1 for none.
+    private var lastSelectedWords: Pair<Int, Int> = -1 to -1
     private var customActionMode: ActionMode? = null
     private var currentText: String = ""
     private var textColor: String = "#000000"
@@ -68,6 +71,23 @@ class AdvancedTextView : TextView {
     private val rangeBounds = RectF()
     private val underlineBounds = RectF()
 
+    // Double taps are only told apart while the app handles them
+    // (onWordDoublePress); otherwise a tap fires onWordPress at once.
+    private var wordDoublePressEnabled = false
+    private val doubleTapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
+    private var doubleTapSlopSquare = 0
+    private var lastTapUpTime = 0L
+    private var lastTapUpX = 0f
+    private var lastTapUpY = 0f
+    // From a double tap's second touch down to its up. The TextView never sees
+    // those events, so it can't select the word as it would on a double tap.
+    private var handlingDoubleTap = false
+    // A tap's onWordPress, held back while a second tap could still come.
+    private var pendingWordPress: Runnable? = null
+    private var lastDownX = 0f
+    private var lastDownY = 0f
+    private var longPressed = false
+
     constructor(context: Context?) : super(context) { init() }
     constructor(context: Context?, attrs: AttributeSet?) : super(context, attrs) { init() }
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int) : super(context, attrs, defStyleAttr) { init() }
@@ -93,6 +113,19 @@ class AdvancedTextView : TextView {
 
         movementMethod = SmartMovementMethod
 
+        val slop = ViewConfiguration.get(context).scaledDoubleTapSlop
+        doubleTapSlopSquare = slop * slop
+
+        // Reports the word, then returns false so the TextView still starts a
+        // selection as usual.
+        setOnLongClickListener {
+            longPressed = true
+            wordAt(lastDownX, lastDownY)?.let {
+                sendWordEvent("onWordLongPress", it.word, it.index)
+            }
+            false
+        }
+
         customSelectionActionModeCallback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                 customActionMode = mode
@@ -107,6 +140,7 @@ class AdvancedTextView : TextView {
 
                 if (selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd) {
                     lastSelectedText = text.subSequence(selectionStart, selectionEnd).toString()
+                    lastSelectedWords = wordIndexRange(selectionStart, selectionEnd)
 
                     menuOptions.forEachIndexed { index, option ->
                         menu?.add(0, index, index, option)
@@ -525,6 +559,8 @@ class AdvancedTextView : TextView {
             val event = Arguments.createMap().apply {
                 putString("selectedText", selectedText)
                 putString("event", eventType)
+                putInt("startWordIndex", lastSelectedWords.first)
+                putInt("endWordIndex", lastSelectedWords.second)
             }
 
             reactContext.getJSModule(RCTEventEmitter::class.java)
@@ -541,7 +577,18 @@ class AdvancedTextView : TextView {
 
         override fun onClick(widget: View) {
             Log.d(TAG, "Word clicked: '$word' (index=$wordIndex)")
-            sendWordPressEvent(word, wordIndex)
+            if (!wordDoublePressEnabled) {
+                sendWordEvent("onWordPress", word, wordIndex)
+                return
+            }
+            // Wait to see whether this is the first tap of a double tap.
+            cancelPendingWordPress()
+            val press = Runnable {
+                pendingWordPress = null
+                sendWordEvent("onWordPress", word, wordIndex)
+            }
+            pendingWordPress = press
+            postDelayed(press, doubleTapTimeout)
         }
 
         // Skips super, which would paint the word in the link color and
@@ -551,7 +598,8 @@ class AdvancedTextView : TextView {
         }
     }
 
-    private fun sendWordPressEvent(word: String, index: Int) {
+    // onWordPress, onWordDoublePress or onWordLongPress.
+    private fun sendWordEvent(eventName: String, word: String, index: Int) {
         try {
             val reactContext = context as? ReactContext ?: return
             val event = Arguments.createMap().apply {
@@ -560,10 +608,102 @@ class AdvancedTextView : TextView {
             }
 
             reactContext.getJSModule(RCTEventEmitter::class.java)
-                .receiveEvent(id, "onWordPress", event)
+                .receiveEvent(id, eventName, event)
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending word press event", e)
+            Log.e(TAG, "Error sending $eventName event", e)
         }
+    }
+
+    fun setWordDoublePressEnabled(enabled: Boolean) {
+        if (wordDoublePressEnabled == enabled) return
+        wordDoublePressEnabled = enabled
+        lastTapUpTime = 0L
+        // A tap held back for a double tap fires now instead of being lost.
+        pendingWordPress?.let {
+            removeCallbacks(it)
+            it.run()
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                lastDownX = event.x
+                lastDownY = event.y
+                longPressed = false
+                if (wordDoublePressEnabled && isSecondTap(event)) {
+                    cancelPendingWordPress()
+                    handlingDoubleTap = true
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP -> if (handlingDoubleTap) {
+                handlingDoubleTap = false
+                lastTapUpTime = 0L
+                wordAt(event.x, event.y)?.let {
+                    sendWordEvent("onWordDoublePress", it.word, it.index)
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> if (handlingDoubleTap) {
+                handlingDoubleTap = false
+                lastTapUpTime = 0L
+                return true
+            }
+        }
+        if (handlingDoubleTap) return true
+
+        val handled = super.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP) {
+            // A long press isn't the first tap of a double tap.
+            if (longPressed) {
+                lastTapUpTime = 0L
+            } else {
+                lastTapUpTime = event.eventTime
+                lastTapUpX = event.x
+                lastTapUpY = event.y
+            }
+        }
+        return handled
+    }
+
+    override fun onDetachedFromWindow() {
+        cancelPendingWordPress()
+        super.onDetachedFromWindow()
+    }
+
+    private fun isSecondTap(down: MotionEvent): Boolean {
+        if (lastTapUpTime == 0L || down.eventTime - lastTapUpTime > doubleTapTimeout) {
+            return false
+        }
+        val dx = down.x - lastTapUpX
+        val dy = down.y - lastTapUpY
+        return dx * dx + dy * dy < doubleTapSlopSquare
+    }
+
+    private fun cancelPendingWordPress() {
+        pendingWordPress?.let { removeCallbacks(it) }
+        pendingWordPress = null
+    }
+
+    // The word under a point in view coordinates, or null for blank space,
+    // including the space past the end of a line.
+    private fun wordAt(x: Float, y: Float): WordPosition? {
+        val currentLayout = layout ?: return null
+        val line = currentLayout.getLineForVertical((y - totalPaddingTop + scrollY).toInt())
+        val lineX = x - totalPaddingLeft + scrollX
+        if (lineX < currentLayout.getLineLeft(line) || lineX > currentLayout.getLineRight(line)) {
+            return null
+        }
+        val offset = getOffsetForPosition(x, y)
+        return wordPositions.find { offset >= it.start && offset <= it.end }
+    }
+
+    // First and last word text[start, end) touches, or -1 to -1 for none.
+    private fun wordIndexRange(start: Int, end: Int): Pair<Int, Int> {
+        val touched = wordPositions.filter { it.start < end && it.end > start }
+        if (touched.isEmpty()) return -1 to -1
+        return touched.first().index to touched.last().index
     }
 
     fun clearSelection() {

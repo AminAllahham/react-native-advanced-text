@@ -52,6 +52,15 @@ import { AdvancedText } from "react-native-advanced-text";
 />
 ```
 
+## Word gestures
+
+| Prop | Fires on | Notes |
+| --- | --- | --- |
+| `onWordPress` | a tap on a word | `{ word, index }` |
+| `onWordDoublePress` | a double tap on a word | `{ word, index }`. A double tap never selects text. While this is set, a single tap waits out the double-tap delay (~300 ms) before `onWordPress`, so a double tap doesn't also fire it. |
+| `onWordLongPress` | a long press on a word | `{ word, index }`. Text selection still starts as usual. |
+| `onSelection` | the selection menu | `{ selectedText, event, startWordIndex, endWordIndex }`: the menu option, and the first and last word index the selection touches (`-1` if none). |
+
 ## Underlined words
 
 An entry in `highlightedWords` with `underline: true` draws a line under the
