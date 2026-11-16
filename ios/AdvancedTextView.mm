@@ -155,6 +155,16 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         // scrolling so the component behaves like <Text> (content grows / clips
         // rather than scrolls).
         _textView.scrollEnabled = NO;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
+        // iOS 26 blurs the content at a scroll view's edges. This one never
+        // scrolls, so the blur would only hide its first lines of text.
+        if (@available(iOS 26.0, *)) {
+            _textView.topEdgeEffect.hidden = YES;
+            _textView.bottomEdgeEffect.hidden = YES;
+            _textView.leftEdgeEffect.hidden = YES;
+            _textView.rightEdgeEffect.hidden = YES;
+        }
+#endif
         _textView.backgroundColor = [UIColor clearColor];
         // Zero all intrinsic padding so the rendered text box matches the size
         // reported by the ShadowNode's measureContent(). Consumers add padding
