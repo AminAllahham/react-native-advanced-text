@@ -54,6 +54,8 @@ class AdvancedTextView : TextView {
     private var lineHeightMultiplier: Float = 1.0f
     // Value from JS, in dp/points (0 = unset). Converted to em for TextView.
     private var letterSpacingDp: Float = 0f
+    // Extra width of each space, in dp/points (0 = none), on top of letter spacing.
+    private var wordSpacingDp: Float = 0f
 
     private var indicatorWordIndex: Int = -1
     private var indicatorColor: String = ""
@@ -110,6 +112,13 @@ class AdvancedTextView : TextView {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             setFallbackLineSpacing(true)
         }
+        // No words split across lines. TextView hyphenated by default before
+        // Android 10, while NativeTextMeasurement and React Native's <Text>
+        // never do, so lines could break differently from how they were
+        // measured. The break strategy is TextView's default, set so the
+        // measurement can match it.
+        hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+        breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
 
         movementMethod = SmartMovementMethod
 
@@ -236,6 +245,12 @@ class AdvancedTextView : TextView {
         updateTextWithHighlights()
     }
 
+    fun setAdvancedWordSpacing(spacingDp: Float) {
+        if (wordSpacingDp == spacingDp) return
+        wordSpacingDp = spacingDp
+        updateTextWithHighlights()
+    }
+
 
     fun setAdvancedFontFamily(family: String) {
         if (fontFamily == family) return
@@ -330,6 +345,11 @@ class AdvancedTextView : TextView {
         }
         wordColorSpans = arrayOfNulls(wordPositions.size)
         applyWordColors(spannableString)
+        // Same conversion as letterSpacing below, and the same spans
+        // NativeTextMeasurement measures with.
+        if (wordSpacingDp != 0f && fontSize > 0f) {
+            NativeTextMeasurement.applyWordSpacing(spannableString, wordSpacingDp / fontSize)
+        }
 
         applyTextAlign()
 
@@ -427,25 +447,38 @@ class AdvancedTextView : TextView {
         val currentLayout = layout ?: return
         val density = resources.displayMetrics.density
 
-        highlightedWords.forEach { highlightedWord ->
-            val wordPos = wordPositions.find { it.index == highlightedWord.index } ?: return@forEach
-            if (highlightedWord.underline) {
+        // Words in a row with the same style share one box per line, the
+        // spaces between them included. A box ends at its last word: taking in
+        // the space after it put the box off-center, over that space.
+        var i = 0
+        while (i < highlightedWords.size) {
+            val first = highlightedWords[i]
+            var last = first
+            while (i + 1 < highlightedWords.size && highlightedWords[i + 1].joins(last)) {
+                last = highlightedWords[++i]
+            }
+            i++
+
+            val firstPos = wordPositions.getOrNull(first.index) ?: continue
+            val lastPos = wordPositions.getOrNull(last.index) ?: continue
+            if (first.underline) {
                 // The word, but not the space after it.
                 drawRangeUnderline(
                     canvas,
                     currentLayout,
-                    wordPos.start,
-                    wordPos.end.coerceAtMost(currentText.length),
-                    parseColor(highlightedWord.highlightColor)
+                    firstPos.start,
+                    firstPos.end.coerceAtMost(currentText.length),
+                    parseColor(first.highlightColor)
                 )
             } else {
                 drawRangeBackground(
                     canvas,
                     currentLayout,
-                    wordPos.start,
-                    wordPos.extendedEnd.coerceAtMost(currentText.length),
-                    parseColor(highlightedWord.highlightColor),
-                    highlightedWord.borderRadius * density
+                    firstPos.start,
+                    lastPos.end.coerceAtMost(currentText.length),
+                    parseColor(first.highlightColor),
+                    first.borderRadius * density,
+                    HIGHLIGHT_PADDING_DP * density
                 )
             }
         }
@@ -466,17 +499,20 @@ class AdvancedTextView : TextView {
         }
     }
 
-    // Fills the background of text[start, end), one box per line.
+    // Fills the background of text[start, end), one box per line, widened by
+    // paddingX on each side.
     private fun drawRangeBackground(
         canvas: Canvas,
         layout: Layout,
         start: Int,
         end: Int,
         color: Int,
-        radius: Float
+        radius: Float,
+        paddingX: Float = 0f
     ) {
         highlightPaint.color = color
         forEachLineOfRange(layout, start, end) {
+            rangeBounds.inset(-paddingX, 0f)
             canvas.drawRoundRect(rangeBounds, radius, radius, highlightPaint)
         }
     }
@@ -777,7 +813,20 @@ data class HighlightedWord(
     val borderRadius: Float = 0f,
     // Draws a line under the word instead of filling its background.
     val underline: Boolean = false
-)
+) {
+    // Whether this background continues `previous`'s into one box: the next
+    // word, in the same style. Underlines stay one per word.
+    fun joins(previous: HighlightedWord): Boolean =
+        !underline &&
+            !previous.underline &&
+            index == previous.index + 1 &&
+            highlightColor == previous.highlightColor &&
+            borderRadius == previous.borderRadius
+}
+
+// Room left and right of a highlight box: under half a space, so the box
+// stays clear of the words beside it.
+private const val HIGHLIGHT_PADDING_DP = 2f
 
 private const val UNDERLINE_THICKNESS_DP = 1.5f
 private const val UNDERLINE_GAP_DP = 2.5f

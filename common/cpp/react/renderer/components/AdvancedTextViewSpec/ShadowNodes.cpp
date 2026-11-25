@@ -87,11 +87,36 @@ AttributedString AdvancedTextViewShadowNode::getAttributedString() const {
   // regardless of paragraph length.
 
   auto attributedString = AttributedString{};
-  attributedString.appendFragment(AttributedString::Fragment{
-      .string = props.text,
-      .textAttributes = textAttributes,
-      .parentShadowView = ShadowView(*this),
-  });
+  if (props.wordSpacing == 0) {
+    attributedString.appendFragment(AttributedString::Fragment{
+        .string = props.text,
+        .textAttributes = textAttributes,
+        .parentShadowView = ShadowView(*this),
+    });
+    return attributedString;
+  }
+
+  // Word spacing widens each space by spacing it more than the letters, as
+  // the native views do (NSKern on iOS, letter spacing on Android): runs of
+  // spaces become their own fragments with the extra letter spacing. A space
+  // is one byte in UTF-8 and never part of another character.
+  auto spaceAttributes = textAttributes;
+  spaceAttributes.letterSpacing = props.letterSpacing + props.wordSpacing;
+  const auto& text = props.text;
+  size_t start = 0;
+  while (start < text.size()) {
+    const bool isSpace = text[start] == ' ';
+    size_t end = start + 1;
+    while (end < text.size() && (text[end] == ' ') == isSpace) {
+      end++;
+    }
+    attributedString.appendFragment(AttributedString::Fragment{
+        .string = text.substr(start, end - start),
+        .textAttributes = isSpace ? spaceAttributes : textAttributes,
+        .parentShadowView = ShadowView(*this),
+    });
+    start = end;
+  }
   return attributedString;
 }
 
@@ -130,6 +155,7 @@ Float AdvancedTextViewShadowNode::measureHeightViaAndroidNative(
       jfloat,
       jfloat,
       jfloat,
+      jfloat,
       jfloat)>("measureHeight");
 
   Float heightPx = method(
@@ -140,6 +166,7 @@ Float AdvancedTextViewShadowNode::measureHeightViaAndroidNative(
       static_cast<jfloat>(fontSize),
       static_cast<jfloat>(lineHeightMultiplier),
       static_cast<jfloat>(props.letterSpacing),
+      static_cast<jfloat>(props.wordSpacing),
       static_cast<jfloat>(widthPx));
 
   if (heightPx <= 0) {

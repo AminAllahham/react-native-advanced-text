@@ -161,6 +161,11 @@ class AdvancedTextViewManager : SimpleViewManager<AdvancedTextView>() {
         view?.setAdvancedLetterSpacing(letterSpacing)
     }
 
+    @ReactProp(name = "wordSpacing")
+    fun setWordSpacing(view: AdvancedTextView?, wordSpacing: Float) {
+        view?.setAdvancedWordSpacing(wordSpacing)
+    }
+
     @ReactProp(name = "wordDoublePressEnabled")
     fun setWordDoublePressEnabled(view: AdvancedTextView?, enabled: Boolean) {
         view?.setWordDoublePressEnabled(enabled)

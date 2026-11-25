@@ -42,6 +42,8 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 @property (nonatomic, strong) NSString *fontFamily;
 @property (nonatomic, assign) CGFloat lineHeight;
 @property (nonatomic, assign) CGFloat letterSpacing;
+// Extra width of each space, in points, on top of letterSpacing.
+@property (nonatomic, assign) CGFloat wordSpacing;
 @property (nonatomic, assign) NSInteger indicatorWordIndex;
 @property (nonatomic, strong) UIColor *indicatorColor;
 @property (nonatomic, strong) NSString *indicatorMode;
@@ -125,6 +127,7 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
             _fontFamily = @"System";
             _lineHeight = 0.0;
             _letterSpacing = 0.0;
+            _wordSpacing = 0.0;
             _indicatorWordIndex = -1;
             _indicatorColor = nil;
             _indicatorMode = @"Highlight";
@@ -307,6 +310,11 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         if (oldViewProps.letterSpacing != newViewProps.letterSpacing) {
             NSLog(@"[AdvancedTextView] Updating letterSpacing to: %f", newViewProps.letterSpacing);
             _letterSpacing = static_cast<CGFloat>(newViewProps.letterSpacing);
+            styleChanged = YES;
+        }
+
+        if (oldViewProps.wordSpacing != newViewProps.wordSpacing) {
+            _wordSpacing = static_cast<CGFloat>(newViewProps.wordSpacing);
             styleChanged = YES;
         }
 
@@ -505,9 +513,10 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc]
                                                         initWithString:_textView.text];
 
+        NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
+        // No words split across lines, the same as the measurement.
+        paragraphStyle.hyphenationFactor = 0.0;
         if (_lineHeight > 0) {
-            NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
-
             UIFont *font = ATResolveFont(_fontFamily, _fontSize > 0 ? _fontSize : 16.0);
             if (!font) {
                 font = [UIFont systemFontOfSize:_fontSize > 0 ? _fontSize : 16.0];
@@ -515,11 +524,10 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
 
             CGFloat lineSpacing = (_lineHeight * font.lineHeight) - font.lineHeight;
             paragraphStyle.lineSpacing = lineSpacing;
-
-            [attributedString addAttribute:NSParagraphStyleAttributeName
-                                     value:paragraphStyle
-                                     range:NSMakeRange(0, attributedString.length)];
         }
+        [attributedString addAttribute:NSParagraphStyleAttributeName
+                                 value:paragraphStyle
+                                 range:NSMakeRange(0, attributedString.length)];
 
         UIFont *font = ATResolveFont(_fontFamily, _fontSize > 0 ? _fontSize : 16.0);
 
@@ -541,6 +549,21 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
             [attributedString addAttribute:NSKernAttributeName
                                      value:@(_letterSpacing)
                                      range:NSMakeRange(0, attributedString.length)];
+        }
+
+        // Word spacing: each space is kerned more than the letters. The text
+        // is unchanged, so word ranges and selections stay as they are. The
+        // ShadowNode measures spaces with the same extra kern.
+        if (_wordSpacing != 0.0) {
+            NSString *plain = attributedString.string;
+            NSNumber *spaceKern = @(_letterSpacing + _wordSpacing);
+            for (NSUInteger i = 0; i < plain.length; i++) {
+                if ([plain characterAtIndex:i] == ' ') {
+                    [attributedString addAttribute:NSKernAttributeName
+                                             value:spaceKern
+                                             range:NSMakeRange(i, 1)];
+                }
+            }
         }
 
 
@@ -640,73 +663,103 @@ static UIFont *ATResolveFont(NSString *family, CGFloat size)
         return;
     }
 
+    // Words in a row with the same style share one box per line, the spaces
+    // between them included. A box ends at its last word: taking in the space
+    // after it (or padding wider than half a space) put it over the next word.
+    NSInteger count = (NSInteger)_wordRanges.count;
+    NSInteger runFirst = -1;
+    NSDictionary *runStyle = nil;
+    for (NSInteger i = 0; i <= count; i++) {
+        NSDictionary *style = i < count ? _highlightStyles[_wordRanges[i][@"index"]] : nil;
+        if (runStyle && style && [self highlightStyle:style matches:runStyle]) {
+            continue;
+        }
+        if (runStyle) {
+            [self fillWordsFrom:runFirst
+                             to:i - 1
+                     inTextView:textView
+                          color:runStyle[@"color"]
+                         radius:[runStyle[@"borderRadius"] doubleValue]
+                        padding:CGSizeMake(2.0, 2.0)];
+        }
+        runFirst = i;
+        runStyle = style;
+    }
+
+    if (![_indicatorMode isEqualToString:@"fill"] && _indicatorWordIndex >= 0 &&
+        _indicatorWordIndex < count && _indicatorColor) {
+        [self fillWordsFrom:_indicatorWordIndex
+                         to:_indicatorWordIndex
+                 inTextView:textView
+                      color:_indicatorColor
+                     radius:0.0
+                    padding:CGSizeZero];
+    }
+}
+
+- (BOOL)highlightStyle:(NSDictionary *)style matches:(NSDictionary *)other
+{
+    UIColor *color = style[@"color"];
+    UIColor *otherColor = other[@"color"];
+    return CGColorEqualToColor(color.CGColor, otherColor.CGColor) &&
+        [style[@"borderRadius"] doubleValue] == [other[@"borderRadius"] doubleValue];
+}
+
+// Fills the text from the start of word `first` to the end of word `last`,
+// one box per line. A line's box stops at its last word, not at the space the
+// line breaks after.
+- (void)fillWordsFrom:(NSInteger)first
+                   to:(NSInteger)last
+           inTextView:(UITextView *)textView
+                color:(UIColor *)color
+               radius:(CGFloat)radius
+              padding:(CGSize)padding
+{
     NSLayoutManager *layoutManager = textView.layoutManager;
     NSTextContainer *textContainer = textView.textContainer;
+    NSString *text = textView.textStorage.string;
+    if (!color || first < 0 || last < first || last >= (NSInteger)_wordRanges.count) {
+        return;
+    }
 
-    for (NSDictionary *wordInfo in _wordRanges) {
-        NSNumber *index = wordInfo[@"index"];
-        NSDictionary *highlightStyle = _highlightStyles[index];
-        if (!highlightStyle) {
-            continue;
+    NSUInteger start = [_wordRanges[first][@"range"] rangeValue].location;
+    NSUInteger end = MIN(NSMaxRange([_wordRanges[last][@"range"] rangeValue]), text.length);
+    if (start >= end) {
+        return;
+    }
+
+    NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:NSMakeRange(start, end - start)
+                                               actualCharacterRange:nil];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    CGPoint origin = CGPointMake(textView.textContainerInset.left, textView.textContainerInset.top);
+    CGFloat cornerRadius = MAX(radius, 0.0);
+
+    [color setFill];
+    [layoutManager enumerateLineFragmentsForGlyphRange:glyphRange
+                                            usingBlock:^(CGRect lineRect, CGRect usedRect, NSTextContainer *container, NSRange lineGlyphRange, BOOL *stop) {
+        NSRange lineGlyphs = NSIntersectionRange(glyphRange, lineGlyphRange);
+        if (lineGlyphs.length == 0) {
+            return;
+        }
+        NSRange lineChars = [layoutManager characterRangeForGlyphRange:lineGlyphs actualGlyphRange:nil];
+        while (lineChars.length > 0 &&
+               [whitespace characterIsMember:[text characterAtIndex:NSMaxRange(lineChars) - 1]]) {
+            lineChars.length--;
+        }
+        if (lineChars.length == 0) {
+            return;
         }
 
-        NSValue *extendedRangeValue = wordInfo[@"extendedRange"];
-        NSRange characterRange = extendedRangeValue ? [extendedRangeValue rangeValue] : [wordInfo[@"range"] rangeValue];
-        if (characterRange.location == NSNotFound || characterRange.length == 0) {
-            continue;
-        }
-
-        UIColor *highlightColor = highlightStyle[@"color"];
-        CGFloat radius = [highlightStyle[@"borderRadius"] doubleValue];
-        NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:characterRange actualCharacterRange:nil];
-
-        [highlightColor setFill];
-        [layoutManager enumerateEnclosingRectsForGlyphRange:glyphRange
+        NSRange boxGlyphs = [layoutManager glyphRangeForCharacterRange:lineChars actualCharacterRange:nil];
+        [layoutManager enumerateEnclosingRectsForGlyphRange:boxGlyphs
                                    withinSelectedGlyphRange:NSMakeRange(NSNotFound, 0)
                                             inTextContainer:textContainer
-                                                 usingBlock:^(CGRect enclosingRect, BOOL *stop) {
-            CGRect adjustedRect = CGRectInset(enclosingRect, -6.0, -2.0);
-            adjustedRect.origin.x += textView.textContainerInset.left;
-            adjustedRect.origin.y += textView.textContainerInset.top;
-
-            UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:adjustedRect
-                                                            cornerRadius:MAX(radius, 0.0)];
-            [path fill];
+                                                 usingBlock:^(CGRect enclosingRect, BOOL *innerStop) {
+            CGRect box = CGRectOffset(CGRectInset(enclosingRect, -padding.width, -padding.height),
+                                      origin.x, origin.y);
+            [[UIBezierPath bezierPathWithRoundedRect:box cornerRadius:cornerRadius] fill];
         }];
-    }
-
-    if (![_indicatorMode isEqualToString:@"fill"] && _indicatorWordIndex >= 0 && _indicatorColor) {
-        for (NSDictionary *wordInfo in _wordRanges) {
-            NSNumber *index = wordInfo[@"index"];
-            if ([index integerValue] != _indicatorWordIndex) {
-                continue;
-            }
-
-            NSValue *extendedRangeValue = wordInfo[@"extendedRange"];
-            NSRange characterRange = extendedRangeValue ? [extendedRangeValue rangeValue] : [wordInfo[@"range"] rangeValue];
-            if (characterRange.location == NSNotFound || characterRange.length == 0) {
-                break;
-            }
-
-            NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:characterRange actualCharacterRange:nil];
-
-            [_indicatorColor setFill];
-            [layoutManager enumerateEnclosingRectsForGlyphRange:glyphRange
-                                       withinSelectedGlyphRange:NSMakeRange(NSNotFound, 0)
-                                                inTextContainer:textContainer
-                                                     usingBlock:^(CGRect enclosingRect, BOOL *stop) {
-                // Changed lines here to remove padding and align exactly to glyph rect
-                CGRect adjustedRect = enclosingRect;
-                adjustedRect.origin.x += textView.textContainerInset.left;
-                adjustedRect.origin.y += textView.textContainerInset.top;
-
-                UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:adjustedRect
-                                                                cornerRadius:0.0];
-                [path fill];
-            }];
-            break;
-        }
-    }
+    }];
 }
 
 

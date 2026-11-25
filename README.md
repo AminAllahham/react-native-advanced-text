@@ -96,7 +96,14 @@ Android without any JS‑side text measurement.
 | `fontFamily`    |                                                                   |
 | `fontWeight`    | `"bold"` or `"italic"`                                             |
 | `letterSpacing` | points; applied to both rendering and measurement                  |
+| `wordSpacing`   | points added to each space, on top of `letterSpacing`; the text and word indexes are unchanged |
 | `lineHeight`    | multiple of the font size (unchanged behavior)                     |
+
+Words are never hyphenated across lines, on either platform.
+
+To find line breaks with a hidden `<Text>`, give each space a nested
+`<Text style={{ letterSpacing: letterSpacing + wordSpacing }}>`: both platforms
+space it the same way as this view.
 
 ## Contributing
 

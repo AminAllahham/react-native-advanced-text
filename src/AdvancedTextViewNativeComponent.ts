@@ -40,6 +40,10 @@ export interface NativeProps extends ViewProps {
   fontFamily?: string;
   lineHeight?: Float;
   letterSpacing?: Float;
+  // Extra space between words, in points, added to every space character on
+  // top of letterSpacing. The text itself is unchanged, so word indexes and
+  // selections stay the same.
+  wordSpacing?: Float;
   indicatorWordIndex?: Int32;
   indicatorColor?: string;
   indicatorMode?: string;
